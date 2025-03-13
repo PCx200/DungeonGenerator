@@ -19,7 +19,6 @@ public class GenerateDungeon : MonoBehaviour
     [SerializeField] int roomCount;
     [SerializeField] int roomHeight;
 
-    [SerializeField] int randomRoom;
     [SerializeField] int roomOverlap;
 
     [SerializeField] List<RectInt> dungeonRooms;
@@ -30,12 +29,9 @@ public class GenerateDungeon : MonoBehaviour
         dungeonRooms.Add(dungeon);
         roomCount = dungeonRooms.Count;
         AlgorithmsUtils.DebugRectInt(dungeon, Color.blue, 100, true, roomHeight);
+        StartCoroutine(RecursiveSplit());
     }
 
-    void Update()
-    {
-       // StartCoroutine(SplitRooms());
-    }
 
     (RectInt, RectInt) Split(RectInt pRoom)
     {
@@ -92,15 +88,34 @@ public class GenerateDungeon : MonoBehaviour
     }
 
     [Button()]
-    IEnumerator SplitRooms()
+    IEnumerator RecursiveSplit()
     {
-        while (dungeonRooms[randomRoom].width > minRoomSize || dungeonRooms[randomRoom].height > minRoomSize)
-        { 
-            for (int i = 0; i < dungeonRooms.Count; i++)
+        bool hasSplit = false;
+        List<RectInt> currentRooms = new List<RectInt>(dungeonRooms); // Copy of dungeonRooms
+
+        foreach (var room in currentRooms)
+        {
+            if (room.width > minRoomSize * 2 || room.height > minRoomSize * 2)
             {
-                randomRoom = dungeonRooms.Count - 1;
-                yield return new WaitForSeconds(0.1f);
-                Split(dungeonRooms[i]);
+                (RectInt room1, RectInt room2) = Split(room);
+                hasSplit = true;
+
+                yield return new WaitForSeconds(0.05f); // Wait to visualize each split
+            }
+        }
+
+        // Continue recursion if any room was split
+        if (hasSplit)
+        {
+            yield return StartCoroutine(RecursiveSplit());
+        }
+        else
+        {
+            yield return new WaitForSeconds(1f);
+            for (int i = 0; i < dungeonRooms.Count; i++)
+            {  
+                RectInt roomToDraw = dungeonRooms[i];
+                DebugDrawingBatcher.BatchCall(() => AlgorithmsUtils.DebugRectInt(roomToDraw, Color.white, 1, true, roomHeight));
             }
         }
     }
@@ -111,12 +126,15 @@ public class GenerateDungeon : MonoBehaviour
         {
             case MapSize.Small:
                 dungeon = new RectInt(0, 0, 100, 100);
+                minRoomSize = 8;
                 break;
             case MapSize.Medium:
                 dungeon = new RectInt(0, 0, 150, 150);
+                minRoomSize = 12;
                 break;
             case MapSize.Large:
                 dungeon = new RectInt(0, 0, 200, 200);
+                minRoomSize = 15;
                 break;
             default:
                 dungeon = new RectInt();
