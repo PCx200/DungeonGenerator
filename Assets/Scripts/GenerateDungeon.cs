@@ -23,6 +23,8 @@ public class GenerateDungeon : MonoBehaviour
 
     [SerializeField] List<RectInt> dungeonRooms;
 
+    [SerializeField] List<RectInt> doors;
+
     void Start()
     {
         ChoseMap();
@@ -39,7 +41,7 @@ public class GenerateDungeon : MonoBehaviour
         RectInt room2 = pRoom;
 
         verticalSplit = Random.value > 0.5f;
-        splitPercent = Random.Range(0.3f, 0.6f);
+        splitPercent = Random.Range(0.375f, 0.725f);
 
         if (verticalSplit)
         {
@@ -81,8 +83,8 @@ public class GenerateDungeon : MonoBehaviour
 
         roomCount = dungeonRooms.Count;
 
-        AlgorithmsUtils.DebugRectInt(room1, Color.yellow, 100, true, roomHeight);
-        AlgorithmsUtils.DebugRectInt(room2, Color.yellow, 100, true, roomHeight);
+        AlgorithmsUtils.DebugRectInt(room1, Color.yellow, 15, true, roomHeight);
+        AlgorithmsUtils.DebugRectInt(room2, Color.yellow, 15, true, roomHeight);
 
         return (room1, room2);
     }
@@ -91,7 +93,7 @@ public class GenerateDungeon : MonoBehaviour
     IEnumerator RecursiveSplit()
     {
         bool hasSplit = false;
-        List<RectInt> currentRooms = new List<RectInt>(dungeonRooms); // Copy of dungeonRooms
+        List<RectInt> currentRooms = new List<RectInt>(dungeonRooms);
 
         foreach (var room in currentRooms)
         {
@@ -100,11 +102,10 @@ public class GenerateDungeon : MonoBehaviour
                 (RectInt room1, RectInt room2) = Split(room);
                 hasSplit = true;
 
-                yield return new WaitForSeconds(0.05f); // Wait to visualize each split
+                yield return new WaitForSeconds(0.05f); 
             }
         }
 
-        // Continue recursion if any room was split
         if (hasSplit)
         {
             yield return StartCoroutine(RecursiveSplit());
@@ -117,8 +118,64 @@ public class GenerateDungeon : MonoBehaviour
                 RectInt roomToDraw = dungeonRooms[i];
                 DebugDrawingBatcher.BatchCall(() => AlgorithmsUtils.DebugRectInt(roomToDraw, Color.white, 1, true, roomHeight));
             }
+            StartCoroutine(PutDoors());
         }
     }
+
+    IEnumerator PutDoors()
+    {
+        yield return new WaitForSeconds(1);
+
+        doors.Clear();
+
+        List<RectInt> intersectingRooms = new List<RectInt>(dungeonRooms);
+
+        for (int i = 0; i < intersectingRooms.Count; i++)
+        {
+            for (int j = i + 1; j < intersectingRooms.Count; j++)
+            {
+                if (AlgorithmsUtils.Intersects(intersectingRooms[i], intersectingRooms[j]))
+                {
+                    RectInt roomA = intersectingRooms[i];
+                    RectInt roomB = intersectingRooms[j];
+
+                    int xMin = Mathf.Max(roomA.xMin, roomB.xMin);
+                    int xMax = Mathf.Min(roomA.xMax, roomB.xMax);
+                    int yMin = Mathf.Max(roomA.yMin, roomB.yMin);
+                    int yMax = Mathf.Min(roomA.yMax, roomB.yMax);
+
+                    Vector2Int doorPosition;
+
+                    int randomOffset = Random.Range(-1, 2);
+
+                    if (xMax - xMin > 5) // vertical wall
+                    {
+                        int doorX = (xMin + xMax) / 2 - randomOffset;
+                        int doorY = yMin;
+                        doorPosition = new Vector2Int(doorX, doorY);
+                    }
+                    else if (yMax - yMin > 5) // horizontal wall
+                    {
+                        int doorX = xMin;
+                        int doorY = (yMin + yMax) / 2 - randomOffset;
+                        doorPosition = new Vector2Int(doorX, doorY);
+                    }
+                    else
+                    {
+                        continue; // no wall found
+                    }
+
+                        
+                    RectInt door = new RectInt(doorPosition.x, doorPosition.y, 1, 1);
+                    doors.Add(door);
+                    yield return new WaitForSeconds(0.01f);
+                    AlgorithmsUtils.DebugRectInt(door, Color.red, 100, true, roomHeight);
+
+                }
+            }
+        }
+    }
+
 
     void ChoseMap()
     {

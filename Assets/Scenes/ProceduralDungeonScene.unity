@@ -460,7 +460,7 @@ MonoBehaviour:
     y: 0
     width: 0
     height: 0
-  map: 1
+  map: 0
   minRoomSize: 0
   splitPercent: 0
   verticalSplit: 0
@@ -468,6 +468,7 @@ MonoBehaviour:
   roomHeight: 0
   roomOverlap: 1
   dungeonRooms: []
+  doors: []
 --- !u!4 &2056975886
 Transform:
   m_ObjectHideFlags: 0
