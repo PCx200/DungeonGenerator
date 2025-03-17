@@ -12,6 +12,7 @@ public class GenerateDungeon : MonoBehaviour
 
     public MapSize map;
 
+    // variables for room modification
     [SerializeField] int minRoomSize;
     [SerializeField] float splitPercent;
     [SerializeField] bool verticalSplit;
@@ -19,14 +20,24 @@ public class GenerateDungeon : MonoBehaviour
     [SerializeField] int roomCount;
     [SerializeField] int roomHeight;
 
+    // needed for creating wall between intersecting rooms
     [SerializeField] int roomOverlap;
+
+    // what percent of the smallest rooms you want to remove after creating the dungeon
+    [SerializeField] int removePercentage;
 
     [SerializeField] List<RectInt> dungeonRooms;
 
     [SerializeField] List<RectInt> doors;
 
+    // graph to represent the connection between the rooms
+    [SerializeField] Dictionary<RectInt, List<RectInt>> dungeonGraph = new Dictionary<RectInt, List<RectInt>>();
+
+
+
     void Start()
     {
+        dungeonRooms = new List<RectInt>();
         ChoseMap();
         dungeonRooms.Add(dungeon);
         roomCount = dungeonRooms.Count;
@@ -34,14 +45,14 @@ public class GenerateDungeon : MonoBehaviour
         StartCoroutine(RecursiveSplit());
     }
 
-
+    #region Split
     (RectInt, RectInt) Split(RectInt pRoom)
     {
         RectInt room1 = pRoom;
         RectInt room2 = pRoom;
 
         verticalSplit = Random.value > 0.5f;
-        splitPercent = Random.Range(0.375f, 0.725f);
+        splitPercent = Mathf.Round(Random.Range(0.3f, 0.7f) * 10f) / 10f;
 
         if (verticalSplit)
         {
@@ -85,7 +96,6 @@ public class GenerateDungeon : MonoBehaviour
 
         AlgorithmsUtils.DebugRectInt(room1, Color.yellow, 15, true, roomHeight);
         AlgorithmsUtils.DebugRectInt(room2, Color.yellow, 15, true, roomHeight);
-
         return (room1, room2);
     }
 
@@ -112,21 +122,89 @@ public class GenerateDungeon : MonoBehaviour
         }
         else
         {
-            yield return new WaitForSeconds(1f);
+            if(removePercentage != 0)
+            { 
+                yield return StartCoroutine(RemoveRooms());
+            }
+
+            yield return StartCoroutine(PutDoors());
+
             for (int i = 0; i < dungeonRooms.Count; i++)
-            {  
+            {
                 RectInt roomToDraw = dungeonRooms[i];
                 DebugDrawingBatcher.BatchCall(() => AlgorithmsUtils.DebugRectInt(roomToDraw, Color.white, 1, true, roomHeight));
-            }
-            StartCoroutine(PutDoors());
+            }  
         }
     }
+    #endregion
 
+    #region Rooms Removal
+    IEnumerator RemoveRooms()
+    {
+        int roomsToRemove = Mathf.FloorToInt(dungeonRooms.Count * removePercentage / 100);
+
+        dungeonRooms.Sort((a, b) => (a.width * a.height).CompareTo(b.width * b.height));
+
+        for (int i = 0; i < roomsToRemove;)
+        {
+            RectInt roomToRemove = dungeonRooms[0];
+            dungeonRooms.RemoveAt(0);
+
+            if (!IsDungeonConnected(dungeonRooms))
+            {
+                dungeonRooms.Add(roomToRemove);
+            }
+            else
+            {
+                i++; // increase only when a room is removed
+            }
+
+            AlgorithmsUtils.DebugRectInt(roomToRemove, Color.red, 10, true, roomHeight);
+            yield return new WaitForSeconds(0.2f);
+        }
+    }
+    #endregion
+
+    #region Check Conectivity
+    //dfs checking if every room is connected
+    bool IsDungeonConnected(List<RectInt> rooms)
+    { 
+        HashSet<RectInt> visited = new HashSet<RectInt>();
+        Stack<RectInt> stack = new Stack<RectInt>();
+
+        stack.Push(rooms[0]);
+
+        while (stack.Count > 0)
+        {
+            RectInt current = stack.Pop();  
+            if (!visited.Add(current)) continue;
+
+            foreach (var neighbour in rooms)
+            {
+                if (!visited.Contains(neighbour) && AreRoomsConnected(current, neighbour))
+                { 
+                    stack.Push(neighbour);
+                }
+            }
+        }
+
+        return visited.Count == rooms.Count;        
+    }
+
+    bool AreRoomsConnected(RectInt room1, RectInt room2)
+    {
+        return (room1.xMin < room2.xMax && room1.xMax > room2.xMin && room1.yMin < room2.yMax && room1.yMax > room2.yMin) || // vertical and horizontal overlap
+           (room1.xMax == room2.xMin || room1.xMin == room2.xMax || room1.yMax == room2.yMin || room1.yMin == room2.yMax);  // side by side and top bottom 
+    }
+    #endregion
+
+    #region Create Doors
     IEnumerator PutDoors()
     {
         yield return new WaitForSeconds(1);
 
         doors.Clear();
+        dungeonGraph.Clear();
 
         List<RectInt> intersectingRooms = new List<RectInt>(dungeonRooms);
 
@@ -136,28 +214,28 @@ public class GenerateDungeon : MonoBehaviour
             {
                 if (AlgorithmsUtils.Intersects(intersectingRooms[i], intersectingRooms[j]))
                 {
-                    RectInt roomA = intersectingRooms[i];
-                    RectInt roomB = intersectingRooms[j];
+                    RectInt room1 = intersectingRooms[i];
+                    RectInt room2 = intersectingRooms[j];
 
-                    int xMin = Mathf.Max(roomA.xMin, roomB.xMin);
-                    int xMax = Mathf.Min(roomA.xMax, roomB.xMax);
-                    int yMin = Mathf.Max(roomA.yMin, roomB.yMin);
-                    int yMax = Mathf.Min(roomA.yMax, roomB.yMax);
+                    int xMin = Mathf.Max(room1.xMin, room2.xMin);
+                    int xMax = Mathf.Min(room1.xMax, room2.xMax);
+                    int yMin = Mathf.Max(room1.yMin, room2.yMin);
+                    int yMax = Mathf.Min(room1.yMax, room2.yMax);
 
                     Vector2Int doorPosition;
 
                     int randomOffset = Random.Range(-1, 2);
 
-                    if (xMax - xMin > 5) // vertical wall
+                    if (xMax - xMin >= 5) // vertical wall
                     {
-                        int doorX = (xMin + xMax) / 2 - randomOffset;
+                        int doorX = (xMin + xMax) / 2 + randomOffset;
                         int doorY = yMin;
                         doorPosition = new Vector2Int(doorX, doorY);
                     }
-                    else if (yMax - yMin > 5) // horizontal wall
+                    else if (yMax - yMin >= 5) // horizontal wall
                     {
                         int doorX = xMin;
-                        int doorY = (yMin + yMax) / 2 - randomOffset;
+                        int doorY = (yMin + yMax) / 2 + randomOffset;
                         doorPosition = new Vector2Int(doorX, doorY);
                     }
                     else
@@ -175,27 +253,33 @@ public class GenerateDungeon : MonoBehaviour
             }
         }
     }
+    #endregion
 
-
+    #region Map Settings
     void ChoseMap()
     {
         switch (map)
         {
             case MapSize.Small:
                 dungeon = new RectInt(0, 0, 100, 100);
-                minRoomSize = 8;
-                break;
+                minRoomSize = 10;
+            break;
+
             case MapSize.Medium:
                 dungeon = new RectInt(0, 0, 150, 150);
-                minRoomSize = 12;
-                break;
+                minRoomSize = 15;
+            break;
+
             case MapSize.Large:
                 dungeon = new RectInt(0, 0, 200, 200);
-                minRoomSize = 15;
-                break;
+                minRoomSize = 20;
+            break;
+
             default:
                 dungeon = new RectInt();
-                break;
+            break;
         }
     }
+    #endregion
+
 }
