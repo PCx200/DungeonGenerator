@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Collections;
 using NaughtyAttributes;
+using System.Linq;
+using UnityEditor.Rendering;
 
 public class GenerateDungeon : MonoBehaviour
 {
@@ -12,12 +14,14 @@ public class GenerateDungeon : MonoBehaviour
 
     public MapSize map;
 
+    [SerializeField] int seed;
+    [SerializeField] bool useRandomSeed;
+
     // variables for room modification
     [SerializeField] int minRoomSize;
     [SerializeField] float splitPercent;
     [SerializeField] bool verticalSplit;
 
-    [SerializeField] int roomCount;
     [SerializeField] int roomHeight;
 
     // needed for creating wall between intersecting rooms
@@ -31,18 +35,34 @@ public class GenerateDungeon : MonoBehaviour
     [SerializeField] List<RectInt> doors;
 
     // graph to represent the connection between the rooms
-    [SerializeField] Dictionary<RectInt, List<RectInt>> dungeonGraph = new Dictionary<RectInt, List<RectInt>>();
+    [SerializeField] Graph<RectInt> graph = new Graph<RectInt>();
 
 
 
     void Start()
     {
+        GenerateSeed();
         dungeonRooms = new List<RectInt>();
         ChoseMap();
         dungeonRooms.Add(dungeon);
-        roomCount = dungeonRooms.Count;
         AlgorithmsUtils.DebugRectInt(dungeon, Color.blue, 100, true, roomHeight);
         StartCoroutine(RecursiveSplit());
+    }
+
+    void GenerateSeed()
+    {
+        if (!useRandomSeed)
+        {
+            Random.InitState(seed);
+            Debug.Log(seed);
+        }
+        else
+        {
+           int randomSeed = Random.Range(1, 100000);
+            Random.InitState(randomSeed);
+
+            Debug.Log(randomSeed);
+        }
     }
 
     #region Split
@@ -92,8 +112,6 @@ public class GenerateDungeon : MonoBehaviour
         dungeonRooms.Add(room1);
         dungeonRooms.Add(room2);
 
-        roomCount = dungeonRooms.Count;
-
         AlgorithmsUtils.DebugRectInt(room1, Color.yellow, 15, true, roomHeight);
         AlgorithmsUtils.DebugRectInt(room2, Color.yellow, 15, true, roomHeight);
         return (room1, room2);
@@ -133,7 +151,8 @@ public class GenerateDungeon : MonoBehaviour
             {
                 RectInt roomToDraw = dungeonRooms[i];
                 DebugDrawingBatcher.BatchCall(() => AlgorithmsUtils.DebugRectInt(roomToDraw, Color.white, 1, true, roomHeight));
-            }  
+            }
+            yield return StartCoroutine(CreateGraph());
         }
     }
     #endregion
@@ -153,6 +172,7 @@ public class GenerateDungeon : MonoBehaviour
             if (!IsDungeonConnected(dungeonRooms))
             {
                 dungeonRooms.Add(roomToRemove);
+                yield break;
             }
             else
             {
@@ -181,7 +201,7 @@ public class GenerateDungeon : MonoBehaviour
 
             foreach (var neighbour in rooms)
             {
-                if (!visited.Contains(neighbour) && AreRoomsConnected(current, neighbour))
+                if (!visited.Contains(neighbour) && AlgorithmsUtils.Intersects(current, neighbour))
                 { 
                     stack.Push(neighbour);
                 }
@@ -191,10 +211,19 @@ public class GenerateDungeon : MonoBehaviour
         return visited.Count == rooms.Count;        
     }
 
-    bool AreRoomsConnected(RectInt room1, RectInt room2)
+    bool ShareDoor(RectInt room, RectInt neighbour, out RectInt sharedDoor)
     {
-        return (room1.xMin < room2.xMax && room1.xMax > room2.xMin && room1.yMin < room2.yMax && room1.yMax > room2.yMin) || // vertical and horizontal overlap
-           (room1.xMax == room2.xMin || room1.xMin == room2.xMax || room1.yMax == room2.yMin || room1.yMin == room2.yMax);  // side by side and top bottom 
+        foreach (var door in doors)
+        {
+            if (AlgorithmsUtils.Intersects(room, door) && AlgorithmsUtils.Intersects(neighbour, door))
+            {
+                sharedDoor = door;  
+                return true;
+            }
+        }
+        sharedDoor = default(RectInt);
+        return false;
+
     }
     #endregion
 
@@ -204,7 +233,6 @@ public class GenerateDungeon : MonoBehaviour
         yield return new WaitForSeconds(1);
 
         doors.Clear();
-        dungeonGraph.Clear();
 
         List<RectInt> intersectingRooms = new List<RectInt>(dungeonRooms);
 
@@ -226,13 +254,13 @@ public class GenerateDungeon : MonoBehaviour
 
                     int randomOffset = Random.Range(-1, 2);
 
-                    if (xMax - xMin >= 5) // vertical wall
+                    if (xMax - xMin > 5) // vertical wall
                     {
                         int doorX = (xMin + xMax) / 2 + randomOffset;
                         int doorY = yMin;
                         doorPosition = new Vector2Int(doorX, doorY);
                     }
-                    else if (yMax - yMin >= 5) // horizontal wall
+                    else if (yMax - yMin > 5) // horizontal wall
                     {
                         int doorX = xMin;
                         int doorY = (yMin + yMax) / 2 + randomOffset;
@@ -254,6 +282,66 @@ public class GenerateDungeon : MonoBehaviour
         }
     }
     #endregion
+
+    IEnumerator CreateGraph()
+    {
+        RectInt topRightRoom = GetTopRightRoom(dungeonRooms);
+        graph.AddNode(topRightRoom);
+
+        List<RectInt> graphRooms = new List<RectInt>();
+
+        foreach (RectInt room in dungeonRooms)
+        { 
+            graphRooms.Add(room);
+            graph.AddNode(room);
+        }
+
+        for (int i = 0; i < graphRooms.Count; i++)
+        {
+            for (int j = i + 1; j < graphRooms.Count; j++)
+            {
+                RectInt sharedDoor;
+                if (AlgorithmsUtils.Intersects(graphRooms[i], graphRooms[j]) && ShareDoor(graphRooms[i], graphRooms[j], out sharedDoor))
+                {
+                    graph.AddEdge(graphRooms[i], sharedDoor);
+                    graph.AddEdge(sharedDoor, graphRooms[j]);
+                }
+
+            }
+        }
+
+        yield return StartCoroutine(graph.DFS(topRightRoom));
+
+        foreach (var node in graph.GetNodes())
+        {
+            Vector3 pos1 = new Vector3(node.x + node.width / 2, 0, node.y + node.height / 2);
+            DebugExtension.DebugWireSphere(pos1, 1.5f, 100, false);
+
+            foreach (var neighbour in graph.GetNeighbors(node))
+            {
+                Vector3 pos2 = new Vector3(neighbour.x + neighbour.width / 2, 0, neighbour.y + neighbour.height / 2);
+
+                yield return new WaitForSeconds(0.35f);
+                DebugExtension.DebugWireSphere(pos2, 1.5f, 100, false);
+
+                RectInt sharedDoor;
+                if (ShareDoor(node, neighbour, out sharedDoor))
+                {
+                    Vector3 doorPos = new Vector3(sharedDoor.x + sharedDoor.width / 2, 0, sharedDoor.y + sharedDoor.height / 2);
+                    Debug.DrawLine(pos1, doorPos, Color.cyan, 100);
+                    Debug.DrawLine(doorPos, pos2, Color.cyan, 100);
+                }
+                
+            }
+        }
+    }
+
+    RectInt GetTopRightRoom(List<RectInt> rooms)
+    {
+        var topRooms = rooms.Where(r => r.yMax == rooms.Max(r => r.yMax));
+
+        return topRooms.OrderByDescending(r => r.xMax).FirstOrDefault();
+    }
 
     #region Map Settings
     void ChoseMap()
