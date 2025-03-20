@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,6 +34,11 @@ public class Graph<T>
     public List<T> GetNodes()
     {
         return new List<T>(adjacencyList.Keys);
+    }
+
+    public T GetNode(int index)
+    {
+        return adjacencyList.Keys.ElementAt(index);
     }
 
     public void AddNode(T node)
@@ -118,10 +124,12 @@ public class Graph<T>
     }
 
     // Depth-First Search (DFS)
-    public IEnumerator DFS(T startNode)
+    public List<T> DFS(T startNode)
     {
         HashSet<T> visitedNodes = new HashSet<T>();
         Stack<T> stack = new Stack<T>();
+
+        List<T> dfsOrder = new List<T>();
 
         stack.Push(startNode);
         visitedNodes.Add(startNode);
@@ -133,18 +141,19 @@ public class Graph<T>
 
             if (!visitedNodes.Contains(currentNode))
             {
-                yield return new WaitForSeconds(1);
                 visitedNodes.Add(currentNode);
+                dfsOrder.Add(currentNode);
 
                 foreach (var neighbour in adjacencyList[currentNode])
                 {
-                    stack.Push(neighbour);
-
-                    Debug.Log(neighbour);
+                    if (!visitedNodes.Contains(neighbour))
+                    {
+                        stack.Push(neighbour);
+                    }
                 }
             }
 
         }
-
+        return dfsOrder;
     }
 }

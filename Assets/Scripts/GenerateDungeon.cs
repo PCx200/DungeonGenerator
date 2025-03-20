@@ -6,6 +6,9 @@ using System.Collections;
 using NaughtyAttributes;
 using System.Linq;
 using UnityEditor.Rendering;
+using UnityEditor.Experimental.GraphView;
+using UnityEngine.UI;
+using System.Xml.Linq;
 
 public class GenerateDungeon : MonoBehaviour
 {
@@ -71,6 +74,7 @@ public class GenerateDungeon : MonoBehaviour
         RectInt room1 = pRoom;
         RectInt room2 = pRoom;
 
+
         verticalSplit = Random.value > 0.5f;
         splitPercent = Mathf.Round(Random.Range(0.3f, 0.7f) * 10f) / 10f;
 
@@ -127,10 +131,11 @@ public class GenerateDungeon : MonoBehaviour
         {
             if (room.width > minRoomSize * 2 || room.height > minRoomSize * 2)
             {
+
+
                 (RectInt room1, RectInt room2) = Split(room);
                 hasSplit = true;
-
-                yield return new WaitForSeconds(0.05f); 
+                
             }
         }
 
@@ -140,12 +145,16 @@ public class GenerateDungeon : MonoBehaviour
         }
         else
         {
-            if(removePercentage != 0)
-            { 
-                yield return StartCoroutine(RemoveRooms());
-            }
-
             yield return StartCoroutine(PutDoors());
+
+            if (removePercentage != 0)
+            { 
+                yield return StartCoroutine(RemoveRoomsAndDoors());
+                foreach (var door in doors)
+                {
+                    AlgorithmsUtils.DebugRectInt(door, Color.green, 100, true, roomHeight);
+                }
+            }
 
             for (int i = 0; i < dungeonRooms.Count; i++)
             {
@@ -158,30 +167,56 @@ public class GenerateDungeon : MonoBehaviour
     #endregion
 
     #region Rooms Removal
-    IEnumerator RemoveRooms()
+    IEnumerator RemoveRoomsAndDoors()
     {
         int roomsToRemove = Mathf.FloorToInt(dungeonRooms.Count * removePercentage / 100);
 
         dungeonRooms.Sort((a, b) => (a.width * a.height).CompareTo(b.width * b.height));
 
+        List<RectInt> removedDoors = new List<RectInt>();
+
         for (int i = 0; i < roomsToRemove;)
         {
+            // removes the smallest room
             RectInt roomToRemove = dungeonRooms[0];
             dungeonRooms.RemoveAt(0);
 
+            List<RectInt> intersectingDoors = doors.Where(door => AlgorithmsUtils.Intersects(roomToRemove, door)).ToList();
+            //removes all doors attached to that room
+            foreach (RectInt door in intersectingDoors)
+            {
+                removedDoors.Add(door);
+                doors.Remove(door);
+            }
+            // checks if the dungeon is split into two
             if (!IsDungeonConnected(dungeonRooms))
             {
+                // adds the last room that has been removed
                 dungeonRooms.Add(roomToRemove);
+
+                // adds the removed doors that are still connected to a room
+                foreach (RectInt removedDoor in removedDoors.Where(door => dungeonRooms.Any(room => AlgorithmsUtils.Intersects(room, door))))
+                {
+                    doors.Add(removedDoor);
+                }
+
+                // if a door intersect only once remove it
+                doors.RemoveAll(door => dungeonRooms.Count(room => AlgorithmsUtils.Intersects(room, door)) <= 1);
+
                 yield break;
             }
             else
             {
                 i++; // increase only when a room is removed
             }
+        
 
-            AlgorithmsUtils.DebugRectInt(roomToRemove, Color.red, 10, true, roomHeight);
+
+
+        AlgorithmsUtils.DebugRectInt(roomToRemove, Color.red, 10, true, roomHeight);
             yield return new WaitForSeconds(0.2f);
         }
+
     }
     #endregion
 
@@ -275,7 +310,7 @@ public class GenerateDungeon : MonoBehaviour
                     RectInt door = new RectInt(doorPosition.x, doorPosition.y, 1, 1);
                     doors.Add(door);
                     yield return new WaitForSeconds(0.01f);
-                    AlgorithmsUtils.DebugRectInt(door, Color.red, 100, true, roomHeight);
+                    AlgorithmsUtils.DebugRectInt(door, Color.red, 10, true, roomHeight);
 
                 }
             }
@@ -288,50 +323,31 @@ public class GenerateDungeon : MonoBehaviour
         RectInt topRightRoom = GetTopRightRoom(dungeonRooms);
         graph.AddNode(topRightRoom);
 
-        List<RectInt> graphRooms = new List<RectInt>();
-
         foreach (RectInt room in dungeonRooms)
         { 
-            graphRooms.Add(room);
             graph.AddNode(room);
         }
-
-        for (int i = 0; i < graphRooms.Count; i++)
+        for (int i = 0; i < graph.GetNodeCount(); i++)
         {
-            for (int j = i + 1; j < graphRooms.Count; j++)
+            for (int j = i + 1; j < graph.GetNodeCount(); j++)
             {
                 RectInt sharedDoor;
-                if (AlgorithmsUtils.Intersects(graphRooms[i], graphRooms[j]) && ShareDoor(graphRooms[i], graphRooms[j], out sharedDoor))
+                if (AlgorithmsUtils.Intersects(graph.GetNode(i), graph.GetNode(j)) && ShareDoor(graph.GetNode(i), graph.GetNode(j), out sharedDoor))
                 {
-                    graph.AddEdge(graphRooms[i], sharedDoor);
-                    graph.AddEdge(sharedDoor, graphRooms[j]);
-                }
+                    Vector3 pos1 = new Vector3(graph.GetNode(i).x + graph.GetNode(i).width / 2, 0, graph.GetNode(i).y + graph.GetNode(i).height / 2);
+                    Vector3 pos2 = new Vector3(graph.GetNode(j).x + graph.GetNode(j).width / 2, 0, graph.GetNode(j).y + graph.GetNode(j).height / 2);
+                    Vector3 doorPos = new Vector3(sharedDoor.x + sharedDoor.width, 0, sharedDoor.y + sharedDoor.height);
 
-            }
-        }
+                    graph.AddEdge(graph.GetNode(i), graph.GetNode(j));
 
-        yield return StartCoroutine(graph.DFS(topRightRoom));
-
-        foreach (var node in graph.GetNodes())
-        {
-            Vector3 pos1 = new Vector3(node.x + node.width / 2, 0, node.y + node.height / 2);
-            DebugExtension.DebugWireSphere(pos1, 1.5f, 100, false);
-
-            foreach (var neighbour in graph.GetNeighbors(node))
-            {
-                Vector3 pos2 = new Vector3(neighbour.x + neighbour.width / 2, 0, neighbour.y + neighbour.height / 2);
-
-                yield return new WaitForSeconds(0.35f);
-                DebugExtension.DebugWireSphere(pos2, 1.5f, 100, false);
-
-                RectInt sharedDoor;
-                if (ShareDoor(node, neighbour, out sharedDoor))
-                {
-                    Vector3 doorPos = new Vector3(sharedDoor.x + sharedDoor.width / 2, 0, sharedDoor.y + sharedDoor.height / 2);
+                    DebugExtension.DebugWireSphere(pos1, 1f, 100);
                     Debug.DrawLine(pos1, doorPos, Color.cyan, 100);
-                    Debug.DrawLine(doorPos, pos2, Color.cyan, 100);
+
+                    DebugExtension.DebugWireSphere(pos2, 1f, 100);
+                    Debug.DrawLine(doorPos, pos2,Color.cyan, 100);
+
+                    yield return new WaitForSeconds(0.1f);
                 }
-                
             }
         }
     }
@@ -350,17 +366,17 @@ public class GenerateDungeon : MonoBehaviour
         {
             case MapSize.Small:
                 dungeon = new RectInt(0, 0, 100, 100);
-                minRoomSize = 10;
+                minRoomSize = 12;
             break;
 
             case MapSize.Medium:
                 dungeon = new RectInt(0, 0, 150, 150);
-                minRoomSize = 15;
+                minRoomSize = 18;
             break;
 
             case MapSize.Large:
                 dungeon = new RectInt(0, 0, 200, 200);
-                minRoomSize = 20;
+                minRoomSize = 24;
             break;
 
             default:
