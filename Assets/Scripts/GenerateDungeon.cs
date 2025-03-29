@@ -9,6 +9,8 @@ using UnityEditor.Rendering;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine.UI;
 using System.Xml.Linq;
+using System.Threading;
+using Unity.Properties;
 
 public class GenerateDungeon : MonoBehaviour
 {
@@ -22,8 +24,10 @@ public class GenerateDungeon : MonoBehaviour
 
     // variables for room modification
     [SerializeField] int minRoomSize;
+
     [SerializeField] float splitPercent;
     [SerializeField] bool verticalSplit;
+
 
     [SerializeField] int roomHeight;
 
@@ -33,6 +37,8 @@ public class GenerateDungeon : MonoBehaviour
     // what percent of the smallest rooms you want to remove after creating the dungeon
     [SerializeField] int removePercentage;
 
+
+    //Dictionary<RectInt, RectInt> graphToDoors = new Dictionary<RectInt, RectInt>();
     [SerializeField] List<RectInt> dungeonRooms;
 
     [SerializeField] List<RectInt> doors;
@@ -40,6 +46,7 @@ public class GenerateDungeon : MonoBehaviour
     // graph to represent the connection between the rooms
     [SerializeField] Graph<RectInt> graph = new Graph<RectInt>();
 
+    System.Random rand;
 
 
     void Start()
@@ -51,19 +58,17 @@ public class GenerateDungeon : MonoBehaviour
         AlgorithmsUtils.DebugRectInt(dungeon, Color.blue, 100, true, roomHeight);
         StartCoroutine(RecursiveSplit());
     }
-
     void GenerateSeed()
     {
         if (!useRandomSeed)
         {
-            Random.InitState(seed);
+            rand = new System.Random(seed);
             Debug.Log(seed);
         }
         else
         {
            int randomSeed = Random.Range(1, 100000);
-            Random.InitState(randomSeed);
-
+            rand = new System.Random();
             Debug.Log(randomSeed);
         }
     }
@@ -75,8 +80,11 @@ public class GenerateDungeon : MonoBehaviour
         RectInt room2 = pRoom;
 
 
-        verticalSplit = Random.value > 0.5f;
-        splitPercent = Mathf.Round(Random.Range(0.3f, 0.7f) * 10f) / 10f;
+        verticalSplit = rand.Next(0, 2) >= 1;
+        //splitPercent = Mathf.Round(Random.Range(0.3f, 0.7f) * 10f) / 10f;
+
+        splitPercent = rand.Next(3, 8) / 10f;
+
 
         if (verticalSplit)
         {
@@ -131,11 +139,9 @@ public class GenerateDungeon : MonoBehaviour
         {
             if (room.width > minRoomSize * 2 || room.height > minRoomSize * 2)
             {
-
-
                 (RectInt room1, RectInt room2) = Split(room);
                 hasSplit = true;
-                
+                yield return new WaitForSeconds(0.05f);
             }
         }
 
@@ -223,10 +229,10 @@ public class GenerateDungeon : MonoBehaviour
     #region Check Conectivity
     //dfs checking if every room is connected
     bool IsDungeonConnected(List<RectInt> rooms)
-    { 
+    {   
         HashSet<RectInt> visited = new HashSet<RectInt>();
         Stack<RectInt> stack = new Stack<RectInt>();
-
+        RectInt sharedDoor;
         stack.Push(rooms[0]);
 
         while (stack.Count > 0)
@@ -236,7 +242,7 @@ public class GenerateDungeon : MonoBehaviour
 
             foreach (var neighbour in rooms)
             {
-                if (!visited.Contains(neighbour) && AlgorithmsUtils.Intersects(current, neighbour))
+                if (!visited.Contains(neighbour) && AlgorithmsUtils.Intersects(current, neighbour) && ShareDoor(current, neighbour, out sharedDoor))
                 { 
                     stack.Push(neighbour);
                 }
@@ -346,12 +352,52 @@ public class GenerateDungeon : MonoBehaviour
                     DebugExtension.DebugWireSphere(pos2, 1f, 100);
                     Debug.DrawLine(doorPos, pos2,Color.cyan, 100);
 
-                    yield return new WaitForSeconds(0.1f);
+                    yield return new WaitForSeconds(0.025f);
+                }
+            }
+        }
+        yield return StartCoroutine(DF(topRightRoom));
+    }
+    IEnumerator DF(RectInt startnode)
+    {
+        HashSet<RectInt> visitedNodes = new HashSet<RectInt>();
+        Stack<RectInt> stack = new Stack<RectInt>();
+
+        stack.Push(startnode);
+
+        while (stack.Count > 0)
+        {
+            RectInt node = stack.Pop();
+
+            Vector3 pos = new Vector3(node.x + node.width / 2, 0, node.y + node.height / 2);
+            DebugExtension.DebugWireSphere(pos, Color.green, 1f, 100);
+
+            if (!visitedNodes.Contains(node))
+            {
+                visitedNodes.Add(node);
+
+                yield return new WaitForSeconds(0.1f);
+
+                if (dungeonRooms.Count == visitedNodes.Count) 
+                {
+                    Debug.Log("DFS completed, all nodes visited.");
+                    foreach (RectInt nod in visitedNodes)
+                    {
+                        Debug.Log(nod);
+                    }
+                    yield break;
+                }
+
+                foreach (RectInt neighbour in graph.GetNeighbors(node))
+                {                       
+                    if (!visitedNodes.Contains(neighbour))
+                    {                      
+                        stack.Push(neighbour);                       
+                    }
                 }
             }
         }
     }
-
     RectInt GetTopRightRoom(List<RectInt> rooms)
     {
         var topRooms = rooms.Where(r => r.yMax == rooms.Max(r => r.yMax));
@@ -375,7 +421,7 @@ public class GenerateDungeon : MonoBehaviour
             break;
 
             case MapSize.Large:
-                dungeon = new RectInt(0, 0, 200, 200);
+                dungeon = new RectInt(0, 0, 250, 250);
                 minRoomSize = 24;
             break;
 

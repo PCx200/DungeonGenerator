@@ -124,25 +124,21 @@ public class Graph<T>
     }
 
     // Depth-First Search (DFS)
-    public List<T> DFS(T startNode)
+    public void DFS(T startNode)
     {
         HashSet<T> visitedNodes = new HashSet<T>();
         Stack<T> stack = new Stack<T>();
 
-        List<T> dfsOrder = new List<T>();
-
         stack.Push(startNode);
-        visitedNodes.Add(startNode);
 
         while (stack.Count > 0)
         {
             T currentNode = stack.Pop();
 
-
             if (!visitedNodes.Contains(currentNode))
             {
                 visitedNodes.Add(currentNode);
-                dfsOrder.Add(currentNode);
+                Debug.Log(currentNode);
 
                 foreach (var neighbour in adjacencyList[currentNode])
                 {
@@ -152,8 +148,6 @@ public class Graph<T>
                     }
                 }
             }
-
         }
-        return dfsOrder;
     }
 }
