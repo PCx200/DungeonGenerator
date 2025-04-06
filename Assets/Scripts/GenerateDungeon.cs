@@ -11,6 +11,7 @@ using UnityEngine.UI;
 using System.Xml.Linq;
 using System.Threading;
 using Unity.Properties;
+using UnityEngine.Analytics;
 
 public class GenerateDungeon : MonoBehaviour
 {
@@ -44,13 +45,17 @@ public class GenerateDungeon : MonoBehaviour
     [SerializeField] List<RectInt> doors;
 
     // graph to represent the connection between the rooms
-    [SerializeField] Graph<RectInt> graph = new Graph<RectInt>();
+
+    [SerializeField] Graph<GraphNodes> graphNodes = new Graph<GraphNodes>();
+
+    [SerializeField] Dictionary<(GraphNodes, GraphNodes), int> edgeWeights = new Dictionary<(GraphNodes, GraphNodes), int>();
 
     System.Random rand;
 
 
     void Start()
     {
+
         GenerateSeed();
         dungeonRooms = new List<RectInt>();
         ChoseMap();
@@ -67,9 +72,9 @@ public class GenerateDungeon : MonoBehaviour
         }
         else
         {
-           int randomSeed = Random.Range(1, 100000);
-            rand = new System.Random();
-            Debug.Log(randomSeed);
+            seed = Random.Range(0, 1000000);
+            rand = new System.Random(seed);
+            Debug.Log(seed);
         }
     }
 
@@ -129,7 +134,7 @@ public class GenerateDungeon : MonoBehaviour
         return (room1, room2);
     }
 
-    [Button()]
+
     IEnumerator RecursiveSplit()
     {
         bool hasSplit = false;
@@ -158,7 +163,7 @@ public class GenerateDungeon : MonoBehaviour
                 yield return StartCoroutine(RemoveRoomsAndDoors());
                 foreach (var door in doors)
                 {
-                    AlgorithmsUtils.DebugRectInt(door, Color.green, 100, true, roomHeight);
+                    AlgorithmsUtils.DebugRectInt(door, Color.green, 10, true, roomHeight);
                 }
             }
 
@@ -219,7 +224,7 @@ public class GenerateDungeon : MonoBehaviour
 
 
 
-        AlgorithmsUtils.DebugRectInt(roomToRemove, Color.red, 10, true, roomHeight);
+            AlgorithmsUtils.DebugRectInt(roomToRemove, Color.red, 10, true, roomHeight);
             yield return new WaitForSeconds(0.2f);
         }
 
@@ -254,7 +259,7 @@ public class GenerateDungeon : MonoBehaviour
 
     bool ShareDoor(RectInt room, RectInt neighbour, out RectInt sharedDoor)
     {
-        foreach (var door in doors)
+        foreach (RectInt door in doors)
         {
             if (AlgorithmsUtils.Intersects(room, door) && AlgorithmsUtils.Intersects(neighbour, door))
             {
@@ -293,7 +298,7 @@ public class GenerateDungeon : MonoBehaviour
 
                     Vector2Int doorPosition;
 
-                    int randomOffset = Random.Range(-1, 2);
+                    int randomOffset = rand.Next(-1, 2);
 
                     if (xMax - xMin > 5) // vertical wall
                     {
@@ -326,78 +331,199 @@ public class GenerateDungeon : MonoBehaviour
 
     IEnumerator CreateGraph()
     {
+        int graphLenght;
+        GraphNodes firstRoom = new GraphNodes();
+
         RectInt topRightRoom = GetTopRightRoom(dungeonRooms);
-        graph.AddNode(topRightRoom);
+
+        firstRoom.node = topRightRoom;
 
         foreach (RectInt room in dungeonRooms)
-        { 
-            graph.AddNode(room);
-        }
-        for (int i = 0; i < graph.GetNodeCount(); i++)
         {
-            for (int j = i + 1; j < graph.GetNodeCount(); j++)
+            GraphNodes roomNode = new GraphNodes();
+            roomNode.node = room;
+            graphNodes.AddNode(roomNode);
+        }
+        graphLenght = graphNodes.GetNodeCount();
+        Debug.Log(graphNodes.GetNodeCount());
+
+        for (int i = 0; i < graphLenght; i++)
+        {
+            for (int j = i + 1; j < graphLenght; j++)
             {
                 RectInt sharedDoor;
-                if (AlgorithmsUtils.Intersects(graph.GetNode(i), graph.GetNode(j)) && ShareDoor(graph.GetNode(i), graph.GetNode(j), out sharedDoor))
+
+                GraphNodes nodeA = graphNodes.GetNode(i);
+                GraphNodes nodeB = graphNodes.GetNode(j);
+
+                if (AlgorithmsUtils.Intersects(nodeA.node, nodeB.node))
                 {
-                    Vector3 pos1 = new Vector3(graph.GetNode(i).x + graph.GetNode(i).width / 2, 0, graph.GetNode(i).y + graph.GetNode(i).height / 2);
-                    Vector3 pos2 = new Vector3(graph.GetNode(j).x + graph.GetNode(j).width / 2, 0, graph.GetNode(j).y + graph.GetNode(j).height / 2);
-                    Vector3 doorPos = new Vector3(sharedDoor.x + sharedDoor.width, 0, sharedDoor.y + sharedDoor.height);
+                    if (ShareDoor(nodeA.node, nodeB.node, out sharedDoor))
+                    {
+                        GraphNodes doorNode = new GraphNodes();
+                        doorNode.isDoor = true;
+                        doorNode.node = sharedDoor;
 
-                    graph.AddEdge(graph.GetNode(i), graph.GetNode(j));
+                        Vector3 pos1 = new Vector3(nodeA.node.x + nodeA.node.width / 2, 0, nodeA.node.y + nodeA.node.height / 2);
+                        Vector3 pos2 = new Vector3(nodeB.node.x + nodeB.node.width / 2, 0, nodeB.node.y + nodeB.node.height / 2);
+                        Vector3 doorPos = new Vector3(doorNode.node.x + doorNode.node.width, 0, doorNode.node.y + doorNode.node.height);
 
-                    DebugExtension.DebugWireSphere(pos1, 1f, 100);
-                    Debug.DrawLine(pos1, doorPos, Color.cyan, 100);
+                        graphNodes.AddNode(doorNode);
 
-                    DebugExtension.DebugWireSphere(pos2, 1f, 100);
-                    Debug.DrawLine(doorPos, pos2,Color.cyan, 100);
+                        graphNodes.AddEdge(nodeA, doorNode);
+                        //doorNode.edgeCount++;
+                        graphNodes.AddEdge(doorNode, nodeB);
+                        //doorNode.edgeCount++;
 
-                    yield return new WaitForSeconds(0.025f);
+                        edgeWeights[(nodeA, doorNode)] = (int)Vector3.Distance(pos1, doorPos);
+                        edgeWeights[(doorNode, nodeB)] = (int)Vector3.Distance(doorPos, pos2);
+                    }
+
                 }
             }
         }
-        yield return StartCoroutine(DF(topRightRoom));
-    }
-    IEnumerator DF(RectInt startnode)
-    {
-        HashSet<RectInt> visitedNodes = new HashSet<RectInt>();
-        Stack<RectInt> stack = new Stack<RectInt>();
 
-        stack.Push(startnode);
+        Debug.Log(graphNodes.GetNodeCount());
+        Debug.Log(edgeWeights.Count);
+
+
+
+        List<KeyValuePair<(GraphNodes, GraphNodes), int>> sorted = edgeWeights.OrderBy(edge => edge.Value).ToList();
+
+        yield return StartCoroutine(KruskalMST(firstRoom, sorted));
+
+       // yield return StartCoroutine(KruskalMST(firstRoom));
+
+        yield break;
+    }
+
+    IEnumerator KruskalMST(GraphNodes startNode, List<KeyValuePair<(GraphNodes, GraphNodes), int>> sortedEdges)
+    {
+        HashSet<GraphNodes> visitedNodes = new HashSet<GraphNodes>();
+        Stack<(GraphNodes node, GraphNodes prev)> stack = new Stack<(GraphNodes, GraphNodes)>(); // Track previous node
+
+
+        // Step 2: Initialize Union-Find structure
+        Dictionary<GraphNodes, GraphNodes> parent = new Dictionary<GraphNodes, GraphNodes>();
+
+
+        foreach (GraphNodes node in graphNodes.GetNodes())
+        {
+            parent[node] = node; // Each node is its own parent initially
+        }
+
+        GraphNodes Find(GraphNodes node)
+        {
+            if (parent[node] != node)
+            {
+                parent[node] = Find(parent[node]); // Path compression
+            }
+            return parent[node];
+        }
+
+        void Union(GraphNodes node1, GraphNodes node2)
+        {
+            GraphNodes root1 = Find(node1);
+            GraphNodes root2 = Find(node2);
+            if (root1 != root2)
+            {
+                parent[root2] = root1;
+            }
+        }
+
+        stack.Push((startNode, startNode)); // Start node has itself as previous
 
         while (stack.Count > 0)
         {
-            RectInt node = stack.Pop();
+            (GraphNodes current, GraphNodes previous) = stack.Pop();
 
-            Vector3 pos = new Vector3(node.x + node.width / 2, 0, node.y + node.height / 2);
-            DebugExtension.DebugWireSphere(pos, Color.green, 1f, 100);
-
-            if (!visitedNodes.Contains(node))
+            if (!visitedNodes.Contains(current))
             {
-                visitedNodes.Add(node);
+                visitedNodes.Add(current);
 
-                yield return new WaitForSeconds(0.1f);
-
-                if (dungeonRooms.Count == visitedNodes.Count) 
+                // Step 3: Traverse edges in MST order
+                foreach (var edge in sortedEdges)
                 {
-                    Debug.Log("DFS completed, all nodes visited.");
-                    foreach (RectInt nod in visitedNodes)
-                    {
-                        Debug.Log(nod);
-                    }
-                    yield break;
-                }
+                    GraphNodes node1 = edge.Key.Item1;
+                    GraphNodes node2 = edge.Key.Item2;
 
-                foreach (RectInt neighbour in graph.GetNeighbors(node))
-                {                       
-                    if (!visitedNodes.Contains(neighbour))
-                    {                      
-                        stack.Push(neighbour);                       
+                    if ((node1.node == current.node || node2.node == current.node) && Find(node1) != Find(node2)) // Ensure it's a valid MST edge
+                    {
+                        GraphNodes neighbor = (node1 == current) ? node2 : node1;
+
+                        if (!visitedNodes.Contains(neighbor))
+                        {
+                            edge.Key.Item1.edgeCount++;
+                            edge.Key.Item2.edgeCount++; 
+                            stack.Push((neighbor, current)); // Pass current node as previous
+                            Union(node1, node2);  
+                        }
+                    }
+                }
+            }
+        }
+
+        RemoveSingleConnectionDoors();
+        Debug.Log(graphNodes.GetNodeCount());
+        visitedNodes.Clear();
+        stack.Clear();
+        stack.Push((startNode, startNode));
+
+        while (stack.Count > 0)
+        {
+            (GraphNodes current, GraphNodes previous) = stack.Pop();
+
+            if (!visitedNodes.Contains(current))
+            {
+                visitedNodes.Add(current);
+
+                // Step 3: Traverse edges in MST order
+                foreach (var edge in sortedEdges)
+                {
+                    GraphNodes node1 = edge.Key.Item1;
+                    GraphNodes node2 = edge.Key.Item2;
+
+                    if (node1.node == current.node && node2.edgeCount != 1 && node2.isDoor 
+                        || node2.node == current.node && node1.edgeCount != 1 && node1.isDoor
+                        || node1.node == current.node && node1.edgeCount != 1 && node1.isDoor 
+                        || node2.node == current.node && node2.edgeCount != 1 && node2.isDoor
+                        )
+                    {
+
+                        GraphNodes neighbor = (node1 == current) ? node2 : node1;
+
+                        if (!visitedNodes.Contains(neighbor))
+                        {
+                            stack.Push((neighbor, current)); // Pass current node as previous
+                        }
+
+                        //Draw the Graph(Nodes & Edges) during execution
+                        Vector3 pos1 = new Vector3(node1.node.x + node1.node.width / 2f, 0, node1.node.y + node1.node.height / 2f);
+                        Vector3 pos2 = new Vector3(node2.node.x + node2.node.width / 2f, 0, node2.node.y + node2.node.height / 2f);
+
+                        DebugExtension.DebugWireSphere(pos1, 1f, 100); // Draw nodes at center
+                        DebugExtension.DebugWireSphere(pos2, 1f, 100);
+                        Debug.DrawLine(pos1, pos2, Color.cyan, 100); // Draw edges
+
+                        yield return new WaitForSeconds(0.05f); // Small delay to visualize step-by-step
                     }
                 }
             }
         }
     }
+    void RemoveSingleConnectionDoors()
+    {
+        List<GraphNodes> doorsToRemove = graphNodes.GetNodes().Where(n => n.isDoor && n.edgeCount == 1).ToList();
+
+        foreach (var door in doorsToRemove)
+        {
+            graphNodes.RemoveNode(door);
+            doors.Remove(door.node);
+
+            AlgorithmsUtils.DebugRectInt(door.node, Color.red, 5);
+        }
+    }
+
     RectInt GetTopRightRoom(List<RectInt> rooms)
     {
         var topRooms = rooms.Where(r => r.yMax == rooms.Max(r => r.yMax));

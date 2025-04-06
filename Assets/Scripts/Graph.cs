@@ -36,9 +36,19 @@ public class Graph<T>
         return new List<T>(adjacencyList.Keys);
     }
 
+    public List<T> GetEdges()
+    {
+        return new List<T>(adjacencyList.Values.Count);
+    }
+
     public T GetNode(int index)
     {
         return adjacencyList.Keys.ElementAt(index);
+    }
+
+    public int GetEdgesCount(T fromNode)
+    {
+        return adjacencyList.TryGetValue(fromNode, out List<T> edges) ? edges.Count : 0;
     }
 
     public void AddNode(T node)
