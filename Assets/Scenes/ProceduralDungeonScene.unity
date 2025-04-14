@@ -205,13 +205,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -10}
+  m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
+  m_LocalPosition: {x: 49, y: 100, z: 49}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 90, y: 0, z: 0}
 --- !u!114 &330585547
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -436,6 +436,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2056975886}
   - component: {fileID: 2056975885}
+  - component: {fileID: 2056975887}
   m_Layer: 0
   m_Name: Dungeon
   m_TagString: Untagged
@@ -460,8 +461,37 @@ MonoBehaviour:
     y: 0
     width: 0
     height: 0
+  onGenerateDungeon:
+    m_PersistentCalls:
+      m_Calls:
+      - m_Target: {fileID: 2056975887}
+        m_TargetAssemblyTypeName: TileMapGenerator, Assembly-CSharp
+        m_MethodName: GenerateTileMap
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+      - m_Target: {fileID: 2056975887}
+        m_TargetAssemblyTypeName: TileMapGenerator, Assembly-CSharp
+        m_MethodName: PrintTileMap
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+  wallPrefab: {fileID: 2201350302292957069, guid: f19c883a2bad5724d9bc6383dab50915, type: 3}
+  floorPrefab: {fileID: 4222421066867764110, guid: b7a6957462e833649b8b8f904ade486a, type: 3}
   map: 0
-  seed: 535168
+  seed: 1
   useRandomSeed: 0
   minRoomSize: 0
   splitPercent: 0
@@ -486,6 +516,39 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2056975887
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2056975884}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d034be85cd74d4b459e5be0b17744ac9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  onGenerateTileMap:
+    m_PersistentCalls:
+      m_Calls: []
+  dungeonGenerator: {fileID: 0}
+  tilePrefabs:
+  - {fileID: 6316659780501673120, guid: ee2ec93b0f8db314d99c5c4ca581bc18, type: 3}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

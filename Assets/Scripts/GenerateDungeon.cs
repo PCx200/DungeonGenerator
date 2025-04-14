@@ -1,4 +1,4 @@
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using Unity.VisualScripting;
 using System.Collections.Generic;
 using UnityEngine;
@@ -12,11 +12,20 @@ using System.Xml.Linq;
 using System.Threading;
 using Unity.Properties;
 using UnityEngine.Analytics;
+using UnityEditor;
+using System.Text;
+using UnityEngine.Events;
 
 public class GenerateDungeon : MonoBehaviour
 {
-    [SerializeField] RectInt dungeon = new RectInt(0, 0, 0, 0);
-    public enum MapSize { Small, Medium, Large }
+    public RectInt dungeon = new RectInt(0, 0, 0, 0);
+
+    [SerializeField]
+    private UnityEvent onGenerateDungeon;
+
+    [SerializeField] GameObject wallPrefab;
+    [SerializeField] GameObject floorPrefab;
+    public enum MapSize { Tiny, Small, Medium, Large, Huge }
 
     public MapSize map;
 
@@ -40,9 +49,9 @@ public class GenerateDungeon : MonoBehaviour
 
 
     //Dictionary<RectInt, RectInt> graphToDoors = new Dictionary<RectInt, RectInt>();
-    [SerializeField] List<RectInt> dungeonRooms;
+    [SerializeField] public List<RectInt> dungeonRooms;
 
-    [SerializeField] List<RectInt> doors;
+    [SerializeField] public List<RectInt> doors;
 
     // graph to represent the connection between the rooms
 
@@ -50,7 +59,11 @@ public class GenerateDungeon : MonoBehaviour
 
     [SerializeField] Dictionary<(GraphNodes, GraphNodes), int> edgeWeights = new Dictionary<(GraphNodes, GraphNodes), int>();
 
+    List<GraphNodes> visitedGraphNodes = new List<GraphNodes>();
+
     System.Random rand;
+
+    int[,] _tileMap;
 
 
     void Start()
@@ -329,6 +342,7 @@ public class GenerateDungeon : MonoBehaviour
     }
     #endregion
 
+    #region Graph and Traversal
     IEnumerator CreateGraph()
     {
         int graphLenght;
@@ -392,15 +406,13 @@ public class GenerateDungeon : MonoBehaviour
 
         yield return StartCoroutine(KruskalMST(firstRoom, sorted));
 
-       // yield return StartCoroutine(KruskalMST(firstRoom));
-
         yield break;
     }
 
     IEnumerator KruskalMST(GraphNodes startNode, List<KeyValuePair<(GraphNodes, GraphNodes), int>> sortedEdges)
     {
         HashSet<GraphNodes> visitedNodes = new HashSet<GraphNodes>();
-        Stack<(GraphNodes node, GraphNodes prev)> stack = new Stack<(GraphNodes, GraphNodes)>(); // Track previous node
+        Stack<GraphNodes> stack = new Stack<GraphNodes>(); // Track previous node
 
 
         // Step 2: Initialize Union-Find structure
@@ -431,11 +443,11 @@ public class GenerateDungeon : MonoBehaviour
             }
         }
 
-        stack.Push((startNode, startNode)); // Start node has itself as previous
+        stack.Push((startNode)); // Start node has itself as previous
 
         while (stack.Count > 0)
         {
-            (GraphNodes current, GraphNodes previous) = stack.Pop();
+            GraphNodes current = stack.Pop();
 
             if (!visitedNodes.Contains(current))
             {
@@ -455,7 +467,7 @@ public class GenerateDungeon : MonoBehaviour
                         {
                             edge.Key.Item1.edgeCount++;
                             edge.Key.Item2.edgeCount++; 
-                            stack.Push((neighbor, current)); // Pass current node as previous
+                            stack.Push(neighbor); // Pass current node as previous
                             Union(node1, node2);  
                         }
                     }
@@ -467,15 +479,16 @@ public class GenerateDungeon : MonoBehaviour
         Debug.Log(graphNodes.GetNodeCount());
         visitedNodes.Clear();
         stack.Clear();
-        stack.Push((startNode, startNode));
+        stack.Push(startNode);
 
         while (stack.Count > 0)
         {
-            (GraphNodes current, GraphNodes previous) = stack.Pop();
+            GraphNodes current = stack.Pop();
 
             if (!visitedNodes.Contains(current))
             {
                 visitedNodes.Add(current);
+                visitedGraphNodes.Add(current);
 
                 // Step 3: Traverse edges in MST order
                 foreach (var edge in sortedEdges)
@@ -494,7 +507,7 @@ public class GenerateDungeon : MonoBehaviour
 
                         if (!visitedNodes.Contains(neighbor))
                         {
-                            stack.Push((neighbor, current)); // Pass current node as previous
+                            stack.Push(neighbor); // Pass current node as previous
                         }
 
                         //Draw the Graph(Nodes & Edges) during execution
@@ -510,6 +523,10 @@ public class GenerateDungeon : MonoBehaviour
                 }
             }
         }
+        onGenerateDungeon.Invoke();
+
+        //GenerateTileMap();
+        //SpawnDungeonAssets();
     }
     void RemoveSingleConnectionDoors()
     {
@@ -530,12 +547,98 @@ public class GenerateDungeon : MonoBehaviour
 
         return topRooms.OrderByDescending(r => r.xMax).FirstOrDefault();
     }
+    #endregion
+
+    #region Simplest Asset Generation
+    //public void SpawnDungeonAssets()
+    //{
+    //    SpawnWalls();
+    //    SpawnFloor();
+    //}
+
+    //void SpawnWalls()
+    //{
+    //    HashSet<Vector3> placedPositions = new HashSet<Vector3>();
+    //    List<Vector3> doorWorldPositions = new List<Vector3>();
+
+    //    foreach (RectInt door in doors)
+    //    {
+    //        Vector3 doorPos = new Vector3(door.x + 0.5f, 0, door.y + 0.5f);
+    //        doorWorldPositions.Add(doorPos);
+    //    }
+
+    //    foreach (RectInt room in dungeonRooms)
+    //    {
+
+    //        for (int i = 0; i < room.width; i++)
+    //        {
+    //            Vector3 bottomPos = new Vector3(room.x + i + 0.5f, 0.5f, room.y + 0.5f);
+    //            if (!doorWorldPositions.Contains(bottomPos) && placedPositions.Add(bottomPos))
+    //            {
+    //                GameObject botWall = Instantiate(wallPrefab, bottomPos, Quaternion.identity);
+    //                botWall.name = $"BottomWall_{room.x + i}_{room.y}";
+    //            }
+
+    //            Vector3 topPos = new Vector3(room.x + i + 0.5f, 0.5f, room.y + room.height - 0.5f);
+    //            if (!doorWorldPositions.Contains(topPos) && placedPositions.Add(topPos))
+    //            {
+    //                GameObject topWall = Instantiate(wallPrefab, topPos, Quaternion.identity);
+    //                topWall.name = $"TopWall_{room.x + i}_{room.y + room.height}";
+    //            }
+
+    //        }
+    //        for (int i = 1; i < room.height - 1; i++)
+    //        {
+    //            Vector3 leftPos = new Vector3(room.x + 0.5f, 0.5f, room.y + i + 0.5f);
+    //            if (!doorWorldPositions.Contains(leftPos) && placedPositions.Add(leftPos))
+    //            {
+    //                GameObject leftWall = Instantiate(wallPrefab, leftPos, Quaternion.identity);
+    //                leftWall.name = $"LeftWall_{room.x}_{room.y + i}";
+    //            }
+
+    //            Vector3 rightPos = new Vector3(room.x + room.width - 0.5f, 0.5f, room.y + i + 0.5f);
+    //            if (!doorWorldPositions.Contains(rightPos) && placedPositions.Add(rightPos))
+    //            {
+    //                GameObject rightWall = Instantiate(wallPrefab, rightPos, Quaternion.identity);
+    //                rightWall.name = $"RightWall_{room.x + room.width}_{room.y + i}";
+    //            }
+    //        }
+    //    }
+    //}
+
+    //void SpawnFloor()
+    //{
+    //    HashSet<Vector3> visited = new HashSet<Vector3>();
+
+    //    foreach (GraphNodes room in visitedGraphNodes)
+    //    {
+    //        for (int i = 0; i < room.node.width; i++)
+    //        {
+    //            for (int j = 0; j < room.node.height; j++)
+    //            {
+    //                Vector3 pos = new Vector3(room.node.x + i + 0.5f, 0, room.node.y + j + 0.5f);
+    //                if (visited.Add(pos))
+    //                {
+    //                    Instantiate(floorPrefab, pos, Quaternion.Euler(90, 0, 0), this.transform);
+    //                }
+                    
+    //            }
+    //        }
+    //    }
+    //}
+
+    #endregion
+   
 
     #region Map Settings
     void ChoseMap()
     {
         switch (map)
         {
+            case MapSize.Tiny:
+                dungeon = new RectInt(0, 0, 50, 50);
+                minRoomSize = 15;
+                break;
             case MapSize.Small:
                 dungeon = new RectInt(0, 0, 100, 100);
                 minRoomSize = 12;
@@ -551,6 +654,10 @@ public class GenerateDungeon : MonoBehaviour
                 minRoomSize = 24;
             break;
 
+            case MapSize.Huge:
+                dungeon = new RectInt(0, 0, 1000, 1000);
+                minRoomSize = 24;
+                break;
             default:
                 dungeon = new RectInt();
             break;
