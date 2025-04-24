@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class Node
 {
-    public RectInt nodeLocation;
+    public RectInt node;
 
     public bool isDoor = false;
 

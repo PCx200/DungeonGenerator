@@ -99,7 +99,7 @@ public class TileMapGenerator : MonoBehaviour
 
         HashSet<Vector2Int> floorPositions = new HashSet<Vector2Int>();
 
-        Vector2Int startPos = new Vector2Int(startNode.nodeLocation.position.x + 2, startNode.nodeLocation.position.y + 2);
+        Vector2Int startPos = new Vector2Int(startNode.node.position.x + 2, startNode.node.position.y + 2);
 
         if (_tileMap[startPos.y, startPos.x] != 0)
         {

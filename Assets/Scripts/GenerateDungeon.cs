@@ -70,10 +70,19 @@ public class GenerateDungeon : MonoBehaviour
 
     int[,] _tileMap;
 
+    [SerializeField]
+    private UnityEvent onBake;
+
 
     void Start()
     {
+       DungeonGenerate();
 
+    }
+
+    [Button]
+    void DungeonGenerate()
+    {
         GenerateSeed();
         dungeonRooms = new List<RectInt>();
         ChoseMap();
@@ -81,6 +90,7 @@ public class GenerateDungeon : MonoBehaviour
         AlgorithmsUtils.DebugRectInt(dungeon, Color.blue, 100, true, roomHeight);
         StartCoroutine(RecursiveSplit());
     }
+
     void GenerateSeed()
     {
         if (!useRandomSeed)
@@ -369,12 +379,12 @@ public class GenerateDungeon : MonoBehaviour
 
         RectInt topRightRoom = GetTopRightRoom(dungeonRooms);
 
-        firstRoom.nodeLocation = topRightRoom;
+        firstRoom.node = topRightRoom;
 
         foreach (RectInt room in dungeonRooms)
         {
             Node roomNode = new Node();
-            roomNode.nodeLocation = room;
+            roomNode.node = room;
             graphNodes.AddNode(roomNode);
         }
         graphLenght = graphNodes.GetNodeCount();
@@ -389,17 +399,17 @@ public class GenerateDungeon : MonoBehaviour
                 Node nodeA = graphNodes.GetNode(i);
                 Node nodeB = graphNodes.GetNode(j);
 
-                if (AlgorithmsUtils.Intersects(nodeA.nodeLocation, nodeB.nodeLocation))
+                if (AlgorithmsUtils.Intersects(nodeA.node, nodeB.node))
                 {
-                    if (ShareDoor(nodeA.nodeLocation, nodeB.nodeLocation, out sharedDoor))
+                    if (ShareDoor(nodeA.node, nodeB.node, out sharedDoor))
                     {
                         Node doorNode = new Node();
                         doorNode.isDoor = true;
-                        doorNode.nodeLocation = sharedDoor;
+                        doorNode.node = sharedDoor;
 
-                        Vector3 posRoomA = new Vector3(nodeA.nodeLocation.x + nodeA.nodeLocation.width / 2, 0, nodeA.nodeLocation.y + nodeA.nodeLocation.height / 2);
-                        Vector3 posRoomB = new Vector3(nodeB.nodeLocation.x + nodeB.nodeLocation.width / 2, 0, nodeB.nodeLocation.y + nodeB.nodeLocation.height / 2);
-                        Vector3 doorPos = new Vector3(doorNode.nodeLocation.x + doorNode.nodeLocation.width, 0, doorNode.nodeLocation.y + doorNode.nodeLocation.height);
+                        Vector3 posRoomA = new Vector3(nodeA.node.x + nodeA.node.width / 2, 0, nodeA.node.y + nodeA.node.height / 2);
+                        Vector3 posRoomB = new Vector3(nodeB.node.x + nodeB.node.width / 2, 0, nodeB.node.y + nodeB.node.height / 2);
+                        Vector3 doorPos = new Vector3(doorNode.node.x + doorNode.node.width, 0, doorNode.node.y + doorNode.node.height);
 
                         graphNodes.AddNode(doorNode);
 
@@ -427,75 +437,87 @@ public class GenerateDungeon : MonoBehaviour
 
         yield break;
     }
-
+    
     IEnumerator KruskalMST(Node startNode, List<KeyValuePair<(Node, Node), int>> sortedEdges)
     {
-        HashSet<Node> visitedNodes = new HashSet<Node>();
-        Stack<Node> stack = new Stack<Node>(); // Track previous node
-
-
-        // Step 2: Initialize Union-Find structure
         Dictionary<Node, Node> parent = new Dictionary<Node, Node>();
+        HashSet<Node> visitedNodes = new HashSet<Node>();
+        Stack<Node> stack = new Stack<Node>();
 
+        InitializeUnionFind(graphNodes.GetNodes(), parent);
 
-        foreach (Node node in graphNodes.GetNodes())
-        {
-            parent[node] = node; // Each node is its own parent initially
-        }
-
-        Node Find(Node node)
-        {
-            if (parent[node] != node)
-            {
-                parent[node] = Find(parent[node]); // Path compression
-            }
-            return parent[node];
-        }
-
-        void Union(Node node1, Node node2)
-        {
-            Node root1 = Find(node1);
-            Node root2 = Find(node2);
-            if (root1 != root2)
-            {
-                parent[root2] = root1;
-            }
-        }
-
-        stack.Push((startNode)); // Start node has itself as previous
-
-        while (stack.Count > 0)
-        {
-            Node current = stack.Pop();
-
-            if (!visitedNodes.Contains(current))
-            {
-                visitedNodes.Add(current);
-
-                // Step 3: Traverse edges in MST order
-                foreach (var edge in sortedEdges)
-                {
-                    Node node1 = edge.Key.Item1;
-                    Node node2 = edge.Key.Item2;
-
-                    if ((node1.nodeLocation == current.nodeLocation || node2.nodeLocation == current.nodeLocation) && Find(node1) != Find(node2)) // Ensure it's a valid MST edge
-                    {
-                        Node neighbor = (node1 == current) ? node2 : node1;
-
-                        if (!visitedNodes.Contains(neighbor))
-                        {
-                            edge.Key.Item1.edgeCount++;
-                            edge.Key.Item2.edgeCount++;
-                            stack.Push(neighbor); // Pass current node as previous
-                            Union(node1, node2);
-                        }
-                    }
-                }
-            }
-        }
+        BuildMST(sortedEdges, graphNodes.GetNodeCount(), parent, visitedNodes, stack);
 
         RemoveSingleConnectionDoors();
-        Debug.Log(graphNodes.GetNodeCount());
+
+        yield return TraverseMST(startNode, sortedEdges, visitedNodes, stack);
+
+        onGenerateDungeon.Invoke();
+
+        //GenerateTileMap();
+        //SpawnDungeonAssets();
+    }
+    #region Traversal Helper Methods
+    void InitializeUnionFind(IEnumerable<Node> nodes, Dictionary<Node, Node> parent)
+    {
+        parent.Clear();
+        foreach (Node node in nodes)
+        {
+            parent[node] = node;
+        }
+    }
+
+    Node Find(Node node, Dictionary<Node, Node> parent)
+    {
+        if (parent[node] != node)
+        {
+            parent[node] = Find(parent[node], parent); // Path compression
+        }
+        return parent[node];
+    }
+
+    void Union(Node node1, Node node2, Dictionary<Node, Node> parent)
+    {
+        Node root1 = Find(node1, parent);
+        Node root2 = Find(node2, parent);
+        if (root1 != root2)
+        {
+            parent[root2] = root1;
+        }
+    }
+
+    void BuildMST(List<KeyValuePair<(Node, Node), int>> sortedEdges, int totalVertices, Dictionary<Node, Node> parent, HashSet<Node> visitedNodes, Stack<Node> stack)
+    {
+        visitedNodes.Clear();
+        stack.Clear();
+        int edgeCount = 0;
+
+        foreach (KeyValuePair<(Node, Node), int> edge in sortedEdges)
+        {
+            Node node1 = edge.Key.Item1;
+            Node node2 = edge.Key.Item2;
+
+            if (Find(node1, parent) != Find(node2, parent))
+            {
+                Union(node1, node2, parent);
+                node1.edgeCount++;
+                node2.edgeCount++;
+
+                if (visitedNodes.Add(node1))
+                    stack.Push(node1);
+
+                if (visitedNodes.Add(node2))
+                    stack.Push(node2);
+
+                edgeCount++;
+                if (edgeCount == totalVertices - 1)
+                    break;
+            }
+        }
+    }
+
+    IEnumerator TraverseMST(Node startNode, List<KeyValuePair<(Node, Node), int>> sortedEdges, HashSet<Node> visitedNodes, Stack<Node> stack)
+    {
         visitedNodes.Clear();
         stack.Clear();
         stack.Push(startNode);
@@ -509,46 +531,44 @@ public class GenerateDungeon : MonoBehaviour
                 visitedNodes.Add(current);
                 visitedGraphNodes.Add(current);
 
-                // Step 3: Traverse edges in MST order
-                foreach (var edge in sortedEdges)
+                foreach (KeyValuePair<(Node,Node), int> edge in sortedEdges)
                 {
                     Node node1 = edge.Key.Item1;
                     Node node2 = edge.Key.Item2;
 
-                    if (node1.nodeLocation == current.nodeLocation && node2.edgeCount != 1 && node2.isDoor
-                        || node2.nodeLocation == current.nodeLocation && node1.edgeCount != 1 && node1.isDoor
-                        || node1.nodeLocation == current.nodeLocation && node1.edgeCount != 1 && node1.isDoor
-                        || node2.nodeLocation == current.nodeLocation && node2.edgeCount != 1 && node2.isDoor
-                        )
+                    if (IsValidMSTEdge(current, node1, node2))
                     {
-
                         Node neighbor = (node1 == current) ? node2 : node1;
-
                         if (!visitedNodes.Contains(neighbor))
-                        {
-                            stack.Push(neighbor); // Pass current node as previous
-                        }
+                            stack.Push(neighbor);
 
-                        //Draw the Graph(Nodes & Edges) during execution
-                        Vector3 pos1 = new Vector3(node1.nodeLocation.x + node1.nodeLocation.width / 2f, 0, node1.nodeLocation.y + node1.nodeLocation.height / 2f);
-                        Vector3 pos2 = new Vector3(node2.nodeLocation.x + node2.nodeLocation.width / 2f, 0, node2.nodeLocation.y + node2.nodeLocation.height / 2f);
-
-                        DebugExtension.DebugWireSphere(pos1, 1f, 100); // Draw nodes at center
-                        DebugExtension.DebugWireSphere(pos2, 1f, 100);
-                        Debug.DrawLine(pos1, pos2, Color.cyan, 100); // Draw edges
+                        DrawDebugEdge(node1, node2);
 
                         if (!createImmediately)
-                        {
-                            yield return new WaitForSeconds(0.05f); // Small delay to visualize step-by-step
-                        }
+                            yield return new WaitForSeconds(0.05f);
                     }
                 }
             }
         }
-        onGenerateDungeon.Invoke();
+    }
 
-        //GenerateTileMap();
-        //SpawnDungeonAssets();
+    bool IsValidMSTEdge(Node current, Node node1, Node node2)
+    {
+        return
+            (node1.node == current.node && node2.edgeCount != 1 && node2.isDoor) ||
+            (node2.node == current.node && node1.edgeCount != 1 && node1.isDoor) ||
+            (node1.node == current.node && node1.edgeCount != 1 && node1.isDoor) ||
+            (node2.node == current.node && node2.edgeCount != 1 && node2.isDoor);
+    }
+
+    void DrawDebugEdge(Node node1, Node node2)
+    {
+        Vector3 pos1 = new Vector3(node1.node.x + node1.node.width / 2f, 0, node1.node.y + node1.node.height / 2f);
+        Vector3 pos2 = new Vector3(node2.node.x + node2.node.width / 2f, 0, node2.node.y + node2.node.height / 2f);
+
+        DebugExtension.DebugWireSphere(pos1, 1f, 100);
+        DebugExtension.DebugWireSphere(pos2, 1f, 100);
+        Debug.DrawLine(pos1, pos2, Color.cyan, 100);
     }
     void RemoveSingleConnectionDoors()
     {
@@ -556,15 +576,13 @@ public class GenerateDungeon : MonoBehaviour
 
         foreach (var door in doorsToRemove)
         {
-            Debug.Log( door.nodeLocation + " removed ");
-            List<Node> rooms = graphNodes.GetNeighbors(door);
-            Debug.Log(door + " => " + door.edgeCount);
             graphNodes.RemoveNode(door);
-            doors.Remove(door.nodeLocation);
+            doors.Remove(door.node);
 
-            AlgorithmsUtils.DebugRectInt(door.nodeLocation, Color.red, 5);
+            AlgorithmsUtils.DebugRectInt(door.node, Color.red, 5);
         }
     }
+    #endregion
 
     RectInt GetTopRightRoom(List<RectInt> rooms)
     {
@@ -696,8 +714,9 @@ public class GenerateDungeon : MonoBehaviour
     }
 
     [Button]
-    void BakeNavMesh()
+    public void BakeNavMesh()
     {
+        onBake.Invoke();
         navMeshSurface.BuildNavMesh();
     }
 
