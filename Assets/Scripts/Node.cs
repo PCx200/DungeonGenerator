@@ -2,9 +2,9 @@ using NUnit.Framework;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class GraphNodes
+public class Node
 {
-    public RectInt node;
+    public RectInt nodeLocation;
 
     public bool isDoor = false;
 

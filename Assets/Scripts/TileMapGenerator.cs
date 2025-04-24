@@ -1,4 +1,5 @@
 ﻿using NaughtyAttributes;
+using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
@@ -7,6 +8,8 @@ using UnityEngine.Tilemaps;
 
 public class TileMapGenerator : MonoBehaviour
 {
+    [SerializeField] bool createImmediately = false;
+
     [SerializeField]
     private UnityEvent onGenerateTileMap;
 
@@ -48,38 +51,121 @@ public class TileMapGenerator : MonoBehaviour
 
         _tileMap = tileMap;
 
-        PutAssets();
+        StartCoroutine(FloorFloodFill(dungeonGenerator.GetStartNode()));
+        StartCoroutine(BuildWalls());
         onGenerateTileMap.Invoke();
     }
-
-    public void PutAssets()
+    public IEnumerator BuildWalls()
     {
-        for (int y = 0; y < _tileMap.GetLength(0) - 1; y++)
+        int width = _tileMap.GetLength(1);
+        int height = _tileMap.GetLength(0);
+
+        for (int y = 0; y < height - 1; y++)
         {
-            for (int x = 0; x < _tileMap.GetLength(1) - 1; x++)
+            for (int x = 0; x < width - 1; x++)
             {
                 int topLeft = _tileMap[y, x];
                 int topRight = _tileMap[y, x + 1];
                 int botLeft = _tileMap[y + 1, x];
                 int botRight = _tileMap[y + 1, x + 1];
 
-                Cell tempCell = new Cell();
-                tempCell.cell = (botRight, topRight, topLeft, botLeft);
-                tempCell.value = tempCell.GetCellValue();
-
-                cells.Add(tempCell);
-
-                // Instantiate the prefab if one exists
-                int value = tempCell.value;
-                if (value >= 0 && value < tilePrefabs.Length && tilePrefabs[value] != null)
+                Cell cell = new Cell
                 {
+                    cell = (botRight, topRight, topLeft, botLeft)
+                };
+                cell.value = cell.GetCellValue(); 
+                cells.Add(cell);
 
-                    Vector3 position = new Vector3(x + 1, 0, y + 1);
+                int value = cell.value;
+
+                if (value != 0 && value < tilePrefabs.Length && tilePrefabs[value] != null)
+                {
+                    Vector3 position = new Vector3(x + 0.5f, 0, y + 0.5f);
                     Instantiate(tilePrefabs[value], position, Quaternion.identity, transform);
                 }
+
+                if (!createImmediately)
+                {
+                    yield return null;
+                }   
             }
         }
     }
+    public IEnumerator FloorFloodFill(Node startNode)
+    {
+        int width = _tileMap.GetLength(1);
+        int height = _tileMap.GetLength(0);
+        bool[,] visited = new bool[height, width];
+
+        HashSet<Vector2Int> floorPositions = new HashSet<Vector2Int>();
+
+        Vector2Int startPos = new Vector2Int(startNode.nodeLocation.position.x + 2, startNode.nodeLocation.position.y + 2);
+
+        if (_tileMap[startPos.y, startPos.x] != 0)
+        {
+            Debug.LogWarning("Start position is not on a floor tile!");
+            yield break;
+        }
+
+        Queue<Vector2Int> queue = new Queue<Vector2Int>();
+        queue.Enqueue(startPos);
+        visited[startPos.y, startPos.x] = true;
+
+        Vector2Int[] directions = new Vector2Int[]
+        {
+            Vector2Int.up,
+            Vector2Int.down,
+            Vector2Int.left,
+            Vector2Int.right,
+            Vector2Int.up + Vector2Int.right,
+            Vector2Int.up + Vector2Int.left,
+            Vector2Int.down + Vector2Int.right,
+            Vector2Int.down + Vector2Int.left
+        };
+
+        while (queue.Count > 0)
+        {
+            Vector2Int current = queue.Dequeue();
+            floorPositions.Add(current);
+
+            foreach (Vector2Int dir in directions)
+            {
+                Vector2Int neighbor = current + dir;
+
+                if (neighbor.x >= 0 && neighbor.x < width &&
+                    neighbor.y >= 0 && neighbor.y < height &&
+                    !visited[neighbor.y, neighbor.x] &&
+                    _tileMap[neighbor.y, neighbor.x] == 0)
+                {
+                    visited[neighbor.y, neighbor.x] = true;
+                    queue.Enqueue(neighbor);
+                }
+            }
+        }
+        foreach (Vector2Int pos in floorPositions) 
+        {
+                int x = pos.x;
+                int y = pos.y;
+
+                
+                if (!floorPositions.Contains(new Vector2Int(x, y)) &&
+                    !floorPositions.Contains(new Vector2Int(x + 1, y)) &&
+                    !floorPositions.Contains(new Vector2Int(x, y + 1)) &&
+                    !floorPositions.Contains(new Vector2Int(x + 1, y + 1)))
+                {
+                    continue;
+                }
+
+                Vector3 position = new Vector3(x, 0, y);
+                Instantiate(tilePrefabs[0], position, Quaternion.identity, transform);
+            if (!createImmediately)
+            {
+                yield return null;
+            }
+        }
+    }
+
+
     public string ToString(bool flip)
     {
         if (_tileMap == null) return "Tile map not generated yet.";
