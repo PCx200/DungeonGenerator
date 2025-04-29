@@ -13,8 +13,6 @@ public class TileMapGenerator : MonoBehaviour
     [SerializeField]
     private UnityEvent onGenerateTileMap;
 
-    [SerializeField]
-    GenerateDungeon dungeonGenerator;
 
     private int[,] _tileMap;
 
@@ -28,22 +26,22 @@ public class TileMapGenerator : MonoBehaviour
 
     private void Start()
     {
-        dungeonGenerator = GetComponent<GenerateDungeon>();
+        
     }
 
     [Button]
     public void GenerateTileMap()
     {
-        int[,] tileMap = new int[dungeonGenerator.dungeon.height, dungeonGenerator.dungeon.width];
+        int[,] tileMap = new int[GenerateDungeon.Instance.dungeon.height, GenerateDungeon.Instance.dungeon.width];
         int rows = tileMap.GetLength(0);
         int cols = tileMap.GetLength(1);
 
         //Fill the map with empty spaces
-        foreach (RectInt room in dungeonGenerator.dungeonRooms)
+        foreach (RectInt room in GenerateDungeon.Instance.dungeonRooms)
         {
             AlgorithmsUtils.FillRectangleOutline(tileMap, room, 1);
         }
-        foreach (RectInt door in dungeonGenerator.doors)
+        foreach (RectInt door in GenerateDungeon.Instance.doors)
         {
             AlgorithmsUtils.FillRectangleOutline(tileMap, door, 0);
         }
@@ -51,7 +49,7 @@ public class TileMapGenerator : MonoBehaviour
 
         _tileMap = tileMap;
 
-        StartCoroutine(FloorFloodFill(dungeonGenerator.GetStartNode()));
+        StartCoroutine(FloorFloodFill(GenerateDungeon.Instance.GetStartNode()));
         StartCoroutine(BuildWalls());
         onGenerateTileMap.Invoke();
     }
@@ -117,10 +115,11 @@ public class TileMapGenerator : MonoBehaviour
             Vector2Int.down,
             Vector2Int.left,
             Vector2Int.right,
-            Vector2Int.up + Vector2Int.right,
-            Vector2Int.up + Vector2Int.left,
-            Vector2Int.down + Vector2Int.right,
-            Vector2Int.down + Vector2Int.left
+            //8-way
+            //Vector2Int.up + Vector2Int.right,
+            //Vector2Int.up + Vector2Int.left,
+            //Vector2Int.down + Vector2Int.right,
+            //Vector2Int.down + Vector2Int.left
         };
 
         while (queue.Count > 0)
@@ -132,10 +131,7 @@ public class TileMapGenerator : MonoBehaviour
             {
                 Vector2Int neighbor = current + dir;
 
-                if (neighbor.x >= 0 && neighbor.x < width &&
-                    neighbor.y >= 0 && neighbor.y < height &&
-                    !visited[neighbor.y, neighbor.x] &&
-                    _tileMap[neighbor.y, neighbor.x] == 0)
+                if (!visited[neighbor.y, neighbor.x] && _tileMap[neighbor.y, neighbor.x] == 0)
                 {
                     visited[neighbor.y, neighbor.x] = true;
                     queue.Enqueue(neighbor);
@@ -144,20 +140,20 @@ public class TileMapGenerator : MonoBehaviour
         }
         foreach (Vector2Int pos in floorPositions) 
         {
-                int x = pos.x;
-                int y = pos.y;
+            int x = pos.x;
+            int y = pos.y;
 
                 
-                if (!floorPositions.Contains(new Vector2Int(x, y)) &&
-                    !floorPositions.Contains(new Vector2Int(x + 1, y)) &&
-                    !floorPositions.Contains(new Vector2Int(x, y + 1)) &&
-                    !floorPositions.Contains(new Vector2Int(x + 1, y + 1)))
-                {
-                    continue;
-                }
+            if (!floorPositions.Contains(new Vector2Int(x, y)) &&
+                !floorPositions.Contains(new Vector2Int(x + 1, y)) &&
+                !floorPositions.Contains(new Vector2Int(x, y + 1)) &&
+                !floorPositions.Contains(new Vector2Int(x + 1, y + 1)))
+            {
+                continue;
+            }
 
-                Vector3 position = new Vector3(x, 0, y);
-                Instantiate(tilePrefabs[0], position, Quaternion.identity, transform);
+            Vector3 position = new Vector3(x, 0, y);
+            Instantiate(tilePrefabs[0], position, Quaternion.identity, transform);
             if (!createImmediately)
             {
                 yield return null;

@@ -19,14 +19,13 @@ using Unity.AI.Navigation;
 
 public class GenerateDungeon : MonoBehaviour
 {
+    public static GenerateDungeon Instance;
+
     [SerializeField] bool createImmediately = false;
 
     [SerializeField] NavMeshSurface navMeshSurface;
 
     public RectInt dungeon = new RectInt(0, 0, 0, 0);
-
-    [SerializeField]
-    private UnityEvent onGenerateDungeon;
 
     //[SerializeField] GameObject wallPrefab;
     //[SerializeField] GameObject floorPrefab;
@@ -60,24 +59,22 @@ public class GenerateDungeon : MonoBehaviour
 
     // graph to represent the connection between the rooms
 
-    [SerializeField] Graph<Node> graphNodes = new Graph<Node>();
+    [SerializeField] Graph<Node> graph = new Graph<Node>();
 
     [SerializeField] Dictionary<(Node, Node), int> edgeWeights = new Dictionary<(Node, Node), int>();
 
-    List<Node> visitedGraphNodes = new List<Node>();
+    List<Node> visitedNodes = new List<Node>();
 
     System.Random rand;
 
     int[,] _tileMap;
 
-    [SerializeField]
-    private UnityEvent onBake;
-
+    [SerializeField] UnityEvent onGenerateDungeon;
 
     void Start()
     {
-       DungeonGenerate();
-
+        DungeonGenerate();
+        Instance = this;    
     }
 
     [Button]
@@ -168,7 +165,7 @@ public class GenerateDungeon : MonoBehaviour
         bool hasSplit = false;
         List<RectInt> currentRooms = new List<RectInt>(dungeonRooms);
 
-        foreach (var room in currentRooms)
+        foreach (RectInt room in currentRooms)
         {
             if (room.width > minRoomSize * 2 || room.height > minRoomSize * 2)
             {
@@ -193,7 +190,7 @@ public class GenerateDungeon : MonoBehaviour
             if (removePercentage != 0)
             {
                 yield return StartCoroutine(RemoveRoomsAndDoors());
-                foreach (var door in doors)
+                foreach (RectInt door in doors)
                 {
                     AlgorithmsUtils.DebugRectInt(door, Color.green, 10, true, roomHeight);
                 }
@@ -385,9 +382,9 @@ public class GenerateDungeon : MonoBehaviour
         {
             Node roomNode = new Node();
             roomNode.node = room;
-            graphNodes.AddNode(roomNode);
+            graph.AddNode(roomNode);
         }
-        graphLenght = graphNodes.GetNodeCount();
+        graphLenght = graph.GetNodeCount();
         //Debug.Log(graphNodes.GetNodeCount());
 
         for (int i = 0; i < graphLenght; i++)
@@ -396,8 +393,8 @@ public class GenerateDungeon : MonoBehaviour
             {
                 RectInt sharedDoor;
 
-                Node nodeA = graphNodes.GetNode(i);
-                Node nodeB = graphNodes.GetNode(j);
+                Node nodeA = graph.GetNode(i);
+                Node nodeB = graph.GetNode(j);
 
                 if (AlgorithmsUtils.Intersects(nodeA.node, nodeB.node))
                 {
@@ -411,11 +408,11 @@ public class GenerateDungeon : MonoBehaviour
                         Vector3 posRoomB = new Vector3(nodeB.node.x + nodeB.node.width / 2, 0, nodeB.node.y + nodeB.node.height / 2);
                         Vector3 doorPos = new Vector3(doorNode.node.x + doorNode.node.width, 0, doorNode.node.y + doorNode.node.height);
 
-                        graphNodes.AddNode(doorNode);
+                        graph.AddNode(doorNode);
 
-                        graphNodes.AddEdge(nodeA, doorNode);
+                        graph.AddEdge(nodeA, doorNode);
                         //doorNode.edgeCount++;
-                        graphNodes.AddEdge(doorNode, nodeB);
+                        graph.AddEdge(doorNode, nodeB);
                         //doorNode.edgeCount++;
 
                         edgeWeights[(nodeA, doorNode)] = (int)Vector3.Distance(posRoomA, doorPos);
@@ -444,9 +441,9 @@ public class GenerateDungeon : MonoBehaviour
         HashSet<Node> visitedNodes = new HashSet<Node>();
         Stack<Node> stack = new Stack<Node>();
 
-        InitializeUnionFind(graphNodes.GetNodes(), parent);
+        InitializeUnionFind(graph.GetNodes(), parent);
 
-        BuildMST(sortedEdges, graphNodes.GetNodeCount(), parent, visitedNodes, stack);
+        BuildMST(sortedEdges, graph.GetNodeCount(), parent, visitedNodes, stack);
 
         RemoveSingleConnectionDoors();
 
@@ -486,7 +483,7 @@ public class GenerateDungeon : MonoBehaviour
         }
     }
 
-    void BuildMST(List<KeyValuePair<(Node, Node), int>> sortedEdges, int totalVertices, Dictionary<Node, Node> parent, HashSet<Node> visitedNodes, Stack<Node> stack)
+    void BuildMST(List<KeyValuePair<(Node, Node), int>> sortedEdges, int nodeCount, Dictionary<Node, Node> parent, HashSet<Node> visitedNodes, Stack<Node> stack)
     {
         visitedNodes.Clear();
         stack.Clear();
@@ -510,7 +507,7 @@ public class GenerateDungeon : MonoBehaviour
                     stack.Push(node2);
 
                 edgeCount++;
-                if (edgeCount == totalVertices - 1)
+                if (edgeCount == nodeCount - 1)
                     break;
             }
         }
@@ -529,7 +526,7 @@ public class GenerateDungeon : MonoBehaviour
             if (!visitedNodes.Contains(current))
             {
                 visitedNodes.Add(current);
-                visitedGraphNodes.Add(current);
+                this.visitedNodes.Add(current);
 
                 foreach (KeyValuePair<(Node,Node), int> edge in sortedEdges)
                 {
@@ -572,11 +569,11 @@ public class GenerateDungeon : MonoBehaviour
     }
     void RemoveSingleConnectionDoors()
     {
-        List<Node> doorsToRemove = graphNodes.GetNodes().Where(n => n.isDoor && n.edgeCount == 1).ToList();
+        List<Node> doorsToRemove = graph.GetNodes().Where(n => n.isDoor && n.edgeCount == 1).ToList();
 
         foreach (var door in doorsToRemove)
         {
-            graphNodes.RemoveNode(door);
+            graph.RemoveNode(door);
             doors.Remove(door.node);
 
             AlgorithmsUtils.DebugRectInt(door.node, Color.red, 5);
@@ -584,7 +581,7 @@ public class GenerateDungeon : MonoBehaviour
     }
     #endregion
 
-    RectInt GetTopRightRoom(List<RectInt> rooms)
+    public RectInt GetTopRightRoom(List<RectInt> rooms)
     {
         var topRooms = rooms.Where(r => r.yMax == rooms.Max(r => r.yMax));
 
@@ -698,7 +695,7 @@ public class GenerateDungeon : MonoBehaviour
                 break;
 
             case MapSize.Huge:
-                dungeon = new RectInt(0, 0, 1000, 1000);
+                dungeon = new RectInt(0, 0, 500, 500);
                 minRoomSize = 24;
                 break;
             default:
@@ -710,14 +707,12 @@ public class GenerateDungeon : MonoBehaviour
 
     public Node GetStartNode()
     {
-        return visitedGraphNodes.FirstOrDefault();
+        return visitedNodes.FirstOrDefault();
     }
 
     [Button]
     public void BakeNavMesh()
     {
-        onBake.Invoke();
         navMeshSurface.BuildNavMesh();
     }
-
 }
