@@ -2,17 +2,16 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.Tilemaps;
 
 public class TileMapGenerator : MonoBehaviour
 {
-    [SerializeField] bool createImmediately = false;
-
     [SerializeField]
     private UnityEvent onGenerateTileMap;
-
+    [SerializeField] UnityEvent onPlacedAssets;
 
     private int[,] _tileMap;
 
@@ -22,16 +21,29 @@ public class TileMapGenerator : MonoBehaviour
     [SerializeField]
     private GameObject[] tilePrefabs;
 
-
+    bool isFloorBuilt;
 
     private void Start()
     {
         
     }
+    void ClearData()
+    {
+        // Clear previous tile objects
+        foreach (Transform child in transform)
+        {
+            Destroy(child.gameObject);
+        }
+
+        _tileMap = null;
+        cells.Clear();
+    }
 
     [Button]
     public void GenerateTileMap()
     {
+        ClearData();
+
         int[,] tileMap = new int[GenerateDungeon.Instance.dungeon.height, GenerateDungeon.Instance.dungeon.width];
         int rows = tileMap.GetLength(0);
         int cols = tileMap.GetLength(1);
@@ -49,14 +61,29 @@ public class TileMapGenerator : MonoBehaviour
 
         _tileMap = tileMap;
 
-        StartCoroutine(FloorFloodFill(GenerateDungeon.Instance.GetStartNode()));
-        StartCoroutine(BuildWalls());
         onGenerateTileMap.Invoke();
     }
+
+    public void SpawnAssets()
+    {
+        if (!GenerateDungeon.Instance.useSimpleAssets)
+        {
+            StartCoroutine(BuildWalls());
+            StartCoroutine(FloorFloodFill(GenerateDungeon.Instance.GetStartNode()));
+        }
+        else
+        {
+            GenerateDungeon.Instance.SpawnSimpleAssets();
+            onPlacedAssets.Invoke();
+        }
+    }
+    
     public IEnumerator BuildWalls()
     {
         int width = _tileMap.GetLength(1);
         int height = _tileMap.GetLength(0);
+
+        int counter = 0;
 
         for (int y = 0; y < height - 1; y++)
         {
@@ -80,10 +107,12 @@ public class TileMapGenerator : MonoBehaviour
                 {
                     Vector3 position = new Vector3(x + 0.5f, 0, y + 0.5f);
                     Instantiate(tilePrefabs[value], position, Quaternion.identity, transform);
+                    counter++;  
                 }
 
-                if (!createImmediately)
+                if (!GenerateDungeon.Instance.createImmediately && counter >= 50)
                 {
+                    counter = 0;
                     yield return null;
                 }   
             }
@@ -93,9 +122,7 @@ public class TileMapGenerator : MonoBehaviour
     {
         int width = _tileMap.GetLength(1);
         int height = _tileMap.GetLength(0);
-        bool[,] visited = new bool[height, width];
-
-        HashSet<Vector2Int> floorPositions = new HashSet<Vector2Int>();
+        HashSet<Vector2Int> visitedPositions = new HashSet<Vector2Int>();
 
         Vector2Int startPos = new Vector2Int(startNode.node.position.x + 2, startNode.node.position.y + 2);
 
@@ -107,7 +134,7 @@ public class TileMapGenerator : MonoBehaviour
 
         Queue<Vector2Int> queue = new Queue<Vector2Int>();
         queue.Enqueue(startPos);
-        visited[startPos.y, startPos.x] = true;
+        visitedPositions.Add(startPos);
 
         Vector2Int[] directions = new Vector2Int[]
         {
@@ -125,40 +152,35 @@ public class TileMapGenerator : MonoBehaviour
         while (queue.Count > 0)
         {
             Vector2Int current = queue.Dequeue();
-            floorPositions.Add(current);
+            visitedPositions.Add(current);
 
             foreach (Vector2Int dir in directions)
             {
                 Vector2Int neighbor = current + dir;
 
-                if (!visited[neighbor.y, neighbor.x] && _tileMap[neighbor.y, neighbor.x] == 0)
+                if (!visitedPositions.Contains(neighbor) && _tileMap[neighbor.y, neighbor.x] == 0)
                 {
-                    visited[neighbor.y, neighbor.x] = true;
+                    visitedPositions.Add(neighbor);
                     queue.Enqueue(neighbor);
                 }
             }
         }
-        foreach (Vector2Int pos in floorPositions) 
+        int counter = 0;
+        foreach (Vector2Int pos in visitedPositions) 
         {
             int x = pos.x;
             int y = pos.y;
 
-                
-            if (!floorPositions.Contains(new Vector2Int(x, y)) &&
-                !floorPositions.Contains(new Vector2Int(x + 1, y)) &&
-                !floorPositions.Contains(new Vector2Int(x, y + 1)) &&
-                !floorPositions.Contains(new Vector2Int(x + 1, y + 1)))
-            {
-                continue;
-            }
-
             Vector3 position = new Vector3(x, 0, y);
             Instantiate(tilePrefabs[0], position, Quaternion.identity, transform);
-            if (!createImmediately)
+            counter++;
+            if (!GenerateDungeon.Instance.createImmediately && counter >= 50)
             {
+                counter = 0;
                 yield return null;
             }
         }
+        onPlacedAssets.Invoke();
     }
 
 

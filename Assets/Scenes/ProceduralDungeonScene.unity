@@ -602,6 +602,9 @@ MonoBehaviour:
     y: 0
     width: 100
     height: 100
+  wallPrefab: {fileID: 2201350302292957069, guid: f19c883a2bad5724d9bc6383dab50915, type: 3}
+  floorPrefab: {fileID: 4222421066867764110, guid: b7a6957462e833649b8b8f904ade486a, type: 3}
+  useSimpleAssets: 0
   map: 1
   seed: 835096
   useRandomSeed: 1
@@ -867,8 +870,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d034be85cd74d4b459e5be0b17744ac9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  createImmediately: 1
   onGenerateTileMap:
+    m_PersistentCalls:
+      m_Calls:
+      - m_Target: {fileID: 2056975887}
+        m_TargetAssemblyTypeName: TileMapGenerator, Assembly-CSharp
+        m_MethodName: SpawnAssets
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+  onPlacedAssets:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 2056975885}
