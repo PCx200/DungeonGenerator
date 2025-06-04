@@ -38,35 +38,26 @@ public class GenerateDungeon : MonoBehaviour
     // variables for room modification
     [SerializeField] int minRoomSize;
 
-    [SerializeField] float splitPercent;
-    [SerializeField] bool verticalSplit;
+    float splitPercent;
+    bool verticalSplit;
 
 
-    [SerializeField] int roomHeight;
+    int roomHeight;
 
     // needed for creating wall between intersecting rooms
-    [SerializeField] int roomOverlap;
+    int roomOverlap = 1;
 
     // what percent of the smallest rooms you want to remove after creating the dungeon
     [SerializeField] int removePercentage;
 
+    public List<RectInt> dungeonRooms;
+    public List<RectInt> doors;
 
-    //Dictionary<RectInt, RectInt> graphToDoors = new Dictionary<RectInt, RectInt>();
-    [SerializeField] public List<RectInt> dungeonRooms;
-
-    [SerializeField] public List<RectInt> doors;
-
-    // graph to represent the connection between the rooms
-
-    [SerializeField] Graph<Node> graph = new Graph<Node>();
-
-    [SerializeField] Dictionary<(Node, Node), int> edgeWeights = new Dictionary<(Node, Node), int>();
-
+    Graph<Node> graph = new Graph<Node>();
+    Dictionary<(Node, Node), int> edgeWeights = new Dictionary<(Node, Node), int>();
     List<Node> visitedNodes = new List<Node>();
 
     System.Random rand;
-
-    int[,] _tileMap;
 
     [SerializeField] UnityEvent onGenerateDungeon;
 
@@ -81,9 +72,12 @@ public class GenerateDungeon : MonoBehaviour
     {
         GenerateSeed();
         dungeonRooms = new List<RectInt>();
+        doors = new List<RectInt>();
         ChoseMap();
         dungeonRooms.Add(dungeon);
-        AlgorithmsUtils.DebugRectInt(dungeon, Color.blue, 100, true, roomHeight);
+        graph = new Graph<Node>();
+        edgeWeights = new Dictionary<(Node, Node), int>();
+        visitedNodes = new List<Node>();
         StartCoroutine(RecursiveSplit());
     }
 
@@ -103,6 +97,10 @@ public class GenerateDungeon : MonoBehaviour
     }
 
     #region Split
+ 
+    /// <summary>
+    /// Splits a given room either vertically or horizontally into two smaller rooms,
+    /// </summary>
     (RectInt, RectInt) Split(RectInt pRoom)
     {
         RectInt room1 = pRoom;
@@ -158,7 +156,9 @@ public class GenerateDungeon : MonoBehaviour
         return (room1, room2);
     }
 
-
+    /// <summary>
+    /// Recursively splits rooms until no further valid splits can be made.
+    /// </summary>
     IEnumerator RecursiveSplit()
     {
         bool hasSplit = false;
@@ -207,6 +207,10 @@ public class GenerateDungeon : MonoBehaviour
     #endregion
 
     #region Rooms Removal
+    /// <summary>
+    /// Removes a specified percentage of the smallest rooms while preserving dungeon connectivity.
+    /// Also removes doors associated with the removed rooms and visualizes the process.
+    /// </summary>
     IEnumerator RemoveRoomsAndDoors()
     {
         int roomsToRemove = Mathf.FloorToInt(dungeonRooms.Count * removePercentage / 100);
@@ -265,7 +269,9 @@ public class GenerateDungeon : MonoBehaviour
     #endregion
 
     #region Check Conectivity
-    //dfs checking if every room is connected
+    /// <summary>
+    /// DFS to check whether all rooms in the dungeon are connected via shared doors.
+    /// </summary>
     bool IsDungeonConnected(List<RectInt> rooms)
     {
         HashSet<RectInt> visited = new HashSet<RectInt>();
@@ -290,6 +296,9 @@ public class GenerateDungeon : MonoBehaviour
         return visited.Count == rooms.Count;
     }
 
+    /// <summary>
+    /// Checks whether two rooms share a door by verifying intersection with existing doors.
+    /// </summary>
     bool ShareDoor(RectInt room, RectInt neighbour, out RectInt sharedDoor)
     {
         foreach (RectInt door in doors)
@@ -307,6 +316,10 @@ public class GenerateDungeon : MonoBehaviour
     #endregion
 
     #region Create Doors
+
+    /// <summary>
+    /// Detects intersecting rooms and places doors between them with slight randomness.
+    /// </summary>
     IEnumerator PutDoors()
     {
         if (!createImmediately)
@@ -369,6 +382,10 @@ public class GenerateDungeon : MonoBehaviour
     #endregion
 
     #region Graph and Traversal
+
+    /// <summary>
+    /// Constructs a graph representing rooms and doors, adding nodes and weighted edges for shared doors.
+    /// </summary>
     IEnumerator CreateGraph()
     {
         int graphLenght;
@@ -434,7 +451,11 @@ public class GenerateDungeon : MonoBehaviour
 
         yield break;
     }
-    
+
+    /// <summary>
+    /// Executes Kruskal's algorithm to form a Minimum Spanning Tree (MST) from a sorted list of edges.
+    /// Also traverses the MST for visual debugging and triggers dungeon generation.
+    /// </summary>
     IEnumerator KruskalMST(Node startNode, List<KeyValuePair<(Node, Node), int>> sortedEdges)
     {
         Dictionary<Node, Node> parent = new Dictionary<Node, Node>();
@@ -450,11 +471,13 @@ public class GenerateDungeon : MonoBehaviour
         //yield return TraverseMSTRecursive(startNode, sortedEdges, visitedNodes);
 
         onGenerateDungeon.Invoke();
-
-        //GenerateTileMap();
-        //SpawnSimpleAssets();
     }
+
     #region Traversal Helper Methods
+
+    /// <summary>
+    /// Initializes the union-find data structure used in Kruskal’s algorithm by assigning each node as its own parent.
+    /// </summary>
     void InitializeUnionFind(IEnumerable<Node> nodes, Dictionary<Node, Node> parent)
     {
         parent.Clear();
@@ -464,6 +487,9 @@ public class GenerateDungeon : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Finds the root of the set that the given node belongs to, with path compression for efficiency.
+    /// </summary>
     Node Find(Node node, Dictionary<Node, Node> parent)
     {
         if (parent[node] != node)
@@ -473,6 +499,9 @@ public class GenerateDungeon : MonoBehaviour
         return parent[node];
     }
 
+    /// <summary>
+    /// Unifies the sets of two nodes in the union-find structure, making one the parent of the other.
+    /// </summary>
     void Union(Node node1, Node node2, Dictionary<Node, Node> parent)
     {
         Node root1 = Find(node1, parent);
@@ -483,6 +512,10 @@ public class GenerateDungeon : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Constructs the MST from sorted edges using union-find and tracks which nodes are included.
+    /// Also updates edge counts and prepares the stack for traversal.
+    /// </summary>
     void BuildMST(List<KeyValuePair<(Node, Node), int>> sortedEdges, int nodeCount, Dictionary<Node, Node> parent, HashSet<Node> visitedNodes, Stack<Node> stack)
     {
         visitedNodes.Clear();
@@ -518,6 +551,9 @@ public class GenerateDungeon : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Traverses the MST using an iterative DFS approach, visualizing edges and marking visited nodes.
+    /// </summary>
     IEnumerator TraverseMST(Node startNode, List<KeyValuePair<(Node, Node), int>> sortedEdges, HashSet<Node> visitedNodes, Stack<Node> stack)
     {
         visitedNodes.Clear();
@@ -582,6 +618,10 @@ public class GenerateDungeon : MonoBehaviour
         this.visitedNodes = visitedNodes.ToList();
     }
 
+    /// <summary>
+    /// Determines whether a given edge between two nodes is valid for inclusion in the MST visualization.
+    /// Specifically checks for door nodes with sufficient connectivity.
+    /// </summary>
     bool IsValidMSTEdge(Node current, Node node1, Node node2)
     {
         return
@@ -591,6 +631,9 @@ public class GenerateDungeon : MonoBehaviour
             (node2.node == current.node && node2.edgeCount != 1 && node2.isDoor);
     }
 
+    /// <summary>
+    /// Draws visual debug lines and spheres between two nodes to represent MST connections in the scene.
+    /// </summary>
     void DrawDebugEdge(Node node1, Node node2)
     {
         Vector3 pos1 = new Vector3(node1.node.x + node1.node.width / 2f, 0, node1.node.y + node1.node.height / 2f);
@@ -600,6 +643,10 @@ public class GenerateDungeon : MonoBehaviour
         DebugExtension.DebugWireSphere(pos2, 1f, 100);
         Debug.DrawLine(pos1, pos2, Color.cyan, 100);
     }
+
+    /// <summary>
+    /// Removes door nodes from the graph that are only connected to one other node, cleaning up unused doors.
+    /// </summary>
     void RemoveSingleConnectionDoors()
     {
         List<Node> doorsToRemove = graph.GetNodes().Where(n => n.isDoor && n.edgeCount == 1).ToList();
@@ -721,6 +768,9 @@ public class GenerateDungeon : MonoBehaviour
 
 
     #region Map Settings
+    /// <summary>
+    /// Sets the dungeon size and minimum room size based on the selected map size enum.
+    /// </summary>
     void ChoseMap()
     {
         switch (map)

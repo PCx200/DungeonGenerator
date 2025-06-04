@@ -40,6 +40,10 @@ public class TileMapGenerator : MonoBehaviour
     }
 
     [Button]
+    /// <summary>
+    /// Generates a tile map representation of the dungeon layout.
+    /// Rooms are outlined with 1s, doors with 0s, and stored in _tileMap.
+    /// </summary>
     public void GenerateTileMap()
     {
         ClearData();
@@ -77,7 +81,10 @@ public class TileMapGenerator : MonoBehaviour
             onPlacedAssets.Invoke();
         }
     }
-    
+
+    /// <summary>
+    /// Builds wall tiles based on marching squares logic from the _tileMap.
+    /// </summary>
     public IEnumerator BuildWalls()
     {
         int width = _tileMap.GetLength(1);
@@ -118,6 +125,10 @@ public class TileMapGenerator : MonoBehaviour
             }
         }
     }
+
+    /// <summary>
+    /// Performs a flood fill from a start node across floor tiles in _tileMap.
+    /// </summary>
     public IEnumerator FloorFloodFill(Node startNode)
     {
         int width = _tileMap.GetLength(1);

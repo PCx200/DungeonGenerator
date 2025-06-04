@@ -4,7 +4,13 @@ public class PlayerManager : MonoBehaviour
 {
     [SerializeField] PlayerController playerPrefab;
     [SerializeField] MouseClickController mouseClickController;
+    [SerializeField] Vector3 cameraPos = new Vector3(0, 9, -7);
+    [SerializeField] Quaternion cameraRotation = Quaternion.Euler(35, 0, 0);
 
+    /// <summary>
+    /// Spawns the player in the top-right room of the dungeon.
+    /// Instantiates the player prefab and attaches the camera to follow the player.
+    /// </summary>
     public void SpawnPlayer()
     {
         RectInt startRoom = GenerateDungeon.Instance.GetTopRightRoom(GenerateDungeon.Instance.dungeonRooms);
@@ -18,17 +24,24 @@ public class PlayerManager : MonoBehaviour
         SetCamera(playerClone);
     }
 
+    /// <summary>
+    /// Registers the player controller to respond to mouse click events.
+    /// Clears old listeners to ensure only the current player is active.
+    /// </summary>
     public void RegisterPlayer(PlayerController playerController)
     {
         mouseClickController.OnClick.RemoveAllListeners();
         mouseClickController.OnClick.AddListener(playerController.GoToDestination);
     }
 
+    /// <summary>
+    /// Attaches the main camera as a child of the player object and positions it for a top-down view.
+    /// </summary>
     private void SetCamera(PlayerController player)
     {
         Camera mainCamera = Camera.main;
         mainCamera.transform.SetParent(player.transform);
-        mainCamera.transform.localPosition = new Vector3(0, 9, -7);
-        mainCamera.transform.rotation = Quaternion.Euler(35, 0, 0);
+        mainCamera.transform.localPosition = cameraPos;
+        mainCamera.transform.rotation = cameraRotation;
     }
 }
