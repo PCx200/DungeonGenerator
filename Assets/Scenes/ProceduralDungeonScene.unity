@@ -274,12 +274,12 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 0}
-        m_TargetAssemblyTypeName: 
-        m_MethodName: 
-        m_Mode: 1
+        m_TargetAssemblyTypeName: FollowPathController, Assembly-CSharp
+        m_MethodName: GoToDestination
+        m_Mode: 0
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: 
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
           m_IntArgument: 0
           m_FloatArgument: 0
           m_StringArgument: 
@@ -439,6 +439,8 @@ MonoBehaviour:
   mouseClickController: {fileID: 330585548}
   cameraPos: {x: 0, y: 9, z: -7}
   cameraRotation: {x: 0.3007058, y: 0, z: 0, w: 0.95371693}
+  useNavMesh: 0
+  navMesh: {fileID: 2039976195}
 --- !u!4 &563829675
 Transform:
   m_ObjectHideFlags: 0
@@ -578,6 +580,7 @@ GameObject:
   - component: {fileID: 2056975886}
   - component: {fileID: 2056975885}
   - component: {fileID: 2056975887}
+  - component: {fileID: 2056975888}
   m_Layer: 0
   m_Name: Dungeon
   m_TagString: Untagged
@@ -607,7 +610,7 @@ MonoBehaviour:
   wallPrefab: {fileID: 2201350302292957069, guid: f19c883a2bad5724d9bc6383dab50915, type: 3}
   floorPrefab: {fileID: 4222421066867764110, guid: b7a6957462e833649b8b8f904ade486a, type: 3}
   useSimpleAssets: 0
-  map: 1
+  map: 0
   seed: 647861
   useRandomSeed: 1
   minRoomSize: 12
@@ -1047,6 +1050,21 @@ MonoBehaviour:
   - {fileID: 712314089189663612, guid: 2e760ba0121b23341be5e83c02c9173b, type: 3}
   - {fileID: 1120180293620837265, guid: 444e00dcfbcf8ca448b3bdcd878d5bce, type: 3}
   - {fileID: 5837973933431875862, guid: 76bb09cb4c27d8a4696214dce0326bdd, type: 3}
+--- !u!114 &2056975888
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2056975884}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9f56d37edf9af0b48a2dcedcc473bb14, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  tileMapGenerator: {fileID: 2056975887}
+  path: []
+  algorithm: 2
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

@@ -30,6 +30,10 @@ public class Graph<T>
             adjacencyList[key].Remove(node);
         }
     }
+    public Dictionary<T, List<T>> GetGraph()
+    {
+        return adjacencyList;   
+    }
 
     public List<T> GetNodes()
     {

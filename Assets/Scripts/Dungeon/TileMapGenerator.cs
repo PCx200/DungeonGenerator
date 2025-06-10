@@ -6,12 +6,13 @@ using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.Tilemaps;
+using UnityEngine.UIElements;
 
 public class TileMapGenerator : MonoBehaviour
 {
     [SerializeField]
     private UnityEvent onGenerateTileMap;
-    [SerializeField] UnityEvent onPlacedAssets;
+    [SerializeField] public UnityEvent onPlacedAssets;
 
     private int[,] _tileMap;
 
@@ -22,6 +23,8 @@ public class TileMapGenerator : MonoBehaviour
     private GameObject[] tilePrefabs;
 
     bool isFloorBuilt;
+
+    public Graph<Vector3> floorGraph = new Graph<Vector3>();
 
     private void Start()
     {
@@ -159,20 +162,50 @@ public class TileMapGenerator : MonoBehaviour
             //Vector2Int.down + Vector2Int.right,
             //Vector2Int.down + Vector2Int.left
         };
+        Vector2Int[] directions8 = new Vector2Int[]
+        {
+            Vector2Int.up,
+            Vector2Int.down,
+            Vector2Int.left,
+            Vector2Int.right,
+            //8-way
+            Vector2Int.up + Vector2Int.right,
+            Vector2Int.up + Vector2Int.left,
+            Vector2Int.down + Vector2Int.right,
+            Vector2Int.down + Vector2Int.left
+        };
 
         while (queue.Count > 0)
         {
             Vector2Int current = queue.Dequeue();
             visitedPositions.Add(current);
 
+            Vector3 currentWorldPos = new Vector3(current.x + 0.5f, 0, current.y + 0.5f);
+            floorGraph.AddNode(currentWorldPos);
+            DebugExtension.DebugWireSphere(new Vector3(current.x, 0, current.y), Color.cyan, 0.3f, 50) ;
+
             foreach (Vector2Int dir in directions)
             {
                 Vector2Int neighbor = current + dir;
-
                 if (!visitedPositions.Contains(neighbor) && _tileMap[neighbor.y, neighbor.x] == 0)
                 {
                     visitedPositions.Add(neighbor);
+
+                    
                     queue.Enqueue(neighbor);
+                }
+            }
+            foreach (Vector2Int dir in directions8)
+            {
+                Vector2Int neighbor = current + dir;
+
+                if (_tileMap[neighbor.y, neighbor.x] == 0)
+                {
+
+                    Vector3 currPos = new Vector3(current.x, 0, current.y);
+                    Vector3 neiPos = new Vector3(neighbor.x, 0, neighbor.y);
+                    floorGraph.AddEdge(currPos, neiPos);
+                    Debug.DrawLine(currPos, neiPos, Color.cyan, 50f);
                 }
             }
         }
